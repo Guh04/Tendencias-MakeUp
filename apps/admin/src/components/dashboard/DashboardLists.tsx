@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, PackageCheck, Receipt, Trophy } from "lucide-react";
 import type { Product, Sale, Client } from "@tendencias/core/types";
-import { PAYMENT_LABELS, formatBRL, formatDateTime } from "@tendencias/core/format";
+import { formatBRL, formatDateTime, paymentSummary } from "@tendencias/core/format";
 import { Badge, Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -66,7 +66,7 @@ export function RecentSalesCard({ sales, clients }: { sales: Sale[]; clients: Cl
                   {clients.find((c) => c.id === s.clientId)?.name ?? "Cliente não identificado"}
                 </p>
                 <p className="text-xs text-ink-500">
-                  {formatDateTime(s.date)} · {PAYMENT_LABELS[s.payment]}
+                  {formatDateTime(s.date)} · {paymentSummary(s.payments)}
                 </p>
               </div>
               <span className="shrink-0 text-sm font-semibold text-brand-700">{formatBRL(s.total)}</span>

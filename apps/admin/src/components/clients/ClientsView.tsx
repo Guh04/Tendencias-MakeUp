@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Eye, Pencil, Plus, Trash2, Users } from "lucide-react";
 import type { Client } from "@tendencias/core/types";
-import { PAYMENT_LABELS, formatBRL, formatDate, formatDateTime } from "@tendencias/core/format";
+import { formatBRL, formatDate, formatDateTime, paymentSummary } from "@tendencias/core/format";
 import { clientStats } from "@tendencias/core/metrics";
 import { actions, useAppState } from "@/lib/store";
 import { useConfirm, useToast } from "@/hooks/useFeedback";
@@ -45,7 +45,8 @@ export function ClientsView() {
       danger: true,
     });
     if (!yes) return;
-    actions.deleteClient(c.id);
+    const res = await actions.deleteClient(c.id);
+    if (!res.ok) return toast.error(res.error);
     toast.success("Cliente excluído.");
   }
 
@@ -165,7 +166,7 @@ export function ClientsView() {
                       <span className="font-semibold text-brand-700">{formatBRL(s.total)}</span>
                     </div>
                     <p className="text-xs text-ink-500">
-                      {s.items.map((i) => `${i.qty}× ${i.name}`).join(", ")} · {PAYMENT_LABELS[s.payment]}
+                      {s.items.map((i) => `${i.qty}× ${i.name}`).join(", ")} · {paymentSummary(s.payments)}
                     </p>
                   </li>
                 ))}

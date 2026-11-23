@@ -41,7 +41,9 @@ function Body({ client, onClose }: { client: Client | null; onClose: () => void 
     setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  function submit(ev: React.FormEvent) {
+  const [busy, setBusy] = useState(false);
+
+  async function submit(ev: React.FormEvent) {
     ev.preventDefault();
     const e: Errors<Key> = {};
     if (form.name.trim().length < 2) e.name = "Informe o nome completo.";
@@ -51,8 +53,10 @@ function Body({ client, onClose }: { client: Client | null; onClose: () => void 
     if (hasErrors(e)) return;
 
     const input = { name: form.name.trim(), phone: form.phone, email: form.email.trim() };
-    if (client) actions.updateClient(client.id, input);
-    else actions.addClient(input);
+    setBusy(true);
+    const res = client ? await actions.updateClient(client.id, input) : await actions.addClient(input);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
     toast.success(client ? "Cliente atualizado." : "Cliente cadastrado com sucesso.");
     onClose();
   }
@@ -78,7 +82,9 @@ function Body({ client, onClose }: { client: Client | null; onClose: () => void 
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit">{client ? "Salvar" : "Cadastrar cliente"}</Button>
+        <Button type="submit" disabled={busy}>
+          {client ? "Salvar" : "Cadastrar cliente"}
+        </Button>
       </div>
     </form>
   );

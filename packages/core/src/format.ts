@@ -1,4 +1,4 @@
-﻿import type { PaymentMethod } from "./types";
+import type { PaymentMethod } from "./types";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -9,7 +9,7 @@ export const formatDate = (iso: string | Date) =>
 
 export const formatDateTime = (iso: string | Date) => {
   const d = new Date(iso);
-  return `${d.toLocaleDateString("pt-BR")} Ã s ${d.toLocaleTimeString("pt-BR", {
+  return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
@@ -18,7 +18,7 @@ export const formatDateTime = (iso: string | Date) => {
 export const formatPercent = (n: number) =>
   `${(Number.isFinite(n) ? n : 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
-/** Converte "12,50" / "1.234,56" / "12.5" em nÃºmero. Retorna NaN se invÃ¡lido. */
+/** Converte "12,50" / "1.234,56" / "12.5" em número. Retorna NaN se inválido. */
 export function parseNumber(value: string): number {
   const v = value.trim();
   if (!v) return NaN;
@@ -48,8 +48,8 @@ export const endOfDay = (d: Date) =>
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   dinheiro: "Dinheiro",
   pix: "PIX",
-  credito: "CartÃ£o de crÃ©dito",
-  debito: "CartÃ£o de dÃ©bito",
+  credito: "Cartão de crédito",
+  debito: "Cartão de débito",
 };
 
 export const PAYMENT_METHODS = Object.keys(PAYMENT_LABELS) as PaymentMethod[];
@@ -57,24 +57,24 @@ export const PAYMENT_METHODS = Object.keys(PAYMENT_LABELS) as PaymentMethod[];
 export const CATEGORIES = [
   "Bases",
   "Corretivos",
-  "PÃ³s",
+  "Pós",
   "Blushes",
   "Batons",
   "Gloss",
-  "MÃ¡scaras de cÃ­lios",
+  "Máscaras de cílios",
   "Sombras",
   "Delineadores",
   "Skincare",
   "Perfumes",
-  "AcessÃ³rios",
+  "Acessórios",
 ];
 
 export const EXPENSE_CATEGORIES = [
   "Aluguel",
-  "Energia e Ã¡gua",
+  "Energia e água",
   "Internet e telefone",
   "Marketing",
-  "SalÃ¡rios",
+  "Salários",
   "Embalagens",
   "Impostos e taxas",
   "Compra de estoque",
@@ -83,5 +83,9 @@ export const EXPENSE_CATEGORIES = [
 
 export const INCOME_CATEGORIES = ["Aporte", "Outros"];
 
-/** Categoria de saÃ­da que representa reposiÃ§Ã£o de mercadoria (nÃ£o entra em despesas operacionais). */
+/** Categoria de saída que representa reposição de mercadoria (não entra em despesas operacionais). */
 export const STOCK_PURCHASE_CATEGORY = "Compra de estoque";
+
+/** Resumo dos pagamentos de uma venda, ex.: "PIX + Dinheiro". */
+export const paymentSummary = (payments: { method: PaymentMethod }[]) =>
+  payments.length ? [...new Set(payments.map((p) => PAYMENT_LABELS[p.method]))].join(" + ") : "—";

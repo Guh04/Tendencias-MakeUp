@@ -51,14 +51,15 @@ export function ProductsView() {
 
   async function remove(p: Product) {
     const yes = await confirm({
-      title: "Excluir produto",
-      message: `Deseja excluir "${p.name}"? Vendas já realizadas continuam no histórico.`,
-      confirmLabel: "Excluir",
+      title: "Arquivar produto",
+      message: `Deseja arquivar "${p.name}"? Ele deixa de aparecer nas listas e nas vendas, mas o histórico de vendas e de estoque é mantido.`,
+      confirmLabel: "Arquivar",
       danger: true,
     });
     if (!yes) return;
-    actions.deleteProduct(p.id);
-    toast.success("Produto excluído.");
+    const res = await actions.archiveProduct(p.id);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Produto arquivado.");
   }
 
   function openNew() {
@@ -151,7 +152,7 @@ export function ProductsView() {
                     <td className="px-5 py-3">
                       <p className="font-medium text-ink-900">{p.name}</p>
                       <p className="text-xs text-ink-500">
-                        {p.sku} · {p.brand}
+                        {p.sku} · {p.barcode}{p.brand ? ` · ${p.brand}` : ""}
                         {p.supplierId && supplierName.get(p.supplierId)
                           ? ` · ${supplierName.get(p.supplierId)}`
                           : ""}
@@ -189,7 +190,7 @@ export function ProductsView() {
                         >
                           <Pencil className="size-4" />
                         </IconButton>
-                        <IconButton aria-label={`Excluir ${p.name}`} title="Excluir" onClick={() => remove(p)} className="hover:text-red-600">
+                        <IconButton aria-label={`Arquivar ${p.name}`} title="Arquivar" onClick={() => remove(p)} className="hover:text-red-600">
                           <Trash2 className="size-4" />
                         </IconButton>
                       </div>

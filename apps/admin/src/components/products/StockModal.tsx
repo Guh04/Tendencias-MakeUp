@@ -22,19 +22,25 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
   const [qty, setQty] = useState("1");
   const [error, setError] = useState("");
 
-  function apply(sign: 1 | -1) {
+  const [reason, setReason] = useState("");
+
+  async function apply(sign: 1 | -1) {
     const n = Number(qty);
     if (!Number.isInteger(n) || n < 1) {
       setError("Informe uma quantidade inteira maior que zero.");
       return;
     }
-    const res = actions.adjustStock(product.id, sign * n);
+    if (sign === -1 && n > product.stock) {
+      setError(`Estoque insuficiente: há apenas ${product.stock} unidade(s).`);
+      return;
+    }
+    const res = await actions.adjustStock(product.id, sign * n, reason.trim());
     if (!res.ok) {
       setError(res.error);
       toast.error(res.error);
       return;
     }
-    toast.success(`Estoque de "${product.name}" atualizado para ${res.data}.`);
+    toast.success(`Estoque de "${product.name}" ${sign === 1 ? "aumentou" : "diminuiu"} em ${n}.`);
     onClose();
   }
 
@@ -57,6 +63,9 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
           invalid={!!error}
           autoFocus
         />
+      </Field>
+      <Field label="Motivo (opcional)">
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex.: reposição, perda, avaria" />
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Button onClick={() => apply(1)}>

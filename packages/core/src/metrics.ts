@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AppState,
   Client,
   DateRange,
@@ -25,8 +25,12 @@ export function inRange(iso: string, range: DateRange): boolean {
 export const salesInRange = (sales: Sale[], range: DateRange) =>
   sales.filter((s) => inRange(s.date, range));
 
-export const saleCost = (s: Sale) => s.items.reduce((sum, i) => sum + i.qty * i.unitCost, 0);
-export const saleUnits = (s: Sale) => s.items.reduce((sum, i) => sum + i.qty, 0);
+/** Custo e unidades consideram apenas o que NAO foi devolvido. */
+export const saleCost = (s: Sale) =>
+  s.items.reduce((sum, i) => sum + (i.qty - i.returnedQty) * i.unitCost, 0);
+export const saleUnits = (s: Sale) => s.items.reduce((sum, i) => sum + (i.qty - i.returnedQty), 0);
+/** Valor da venda depois de descontar devolucoes. */
+export const saleNet = (s: Sale) => round2(s.total - s.refunded);
 
 export const isLowStock = (p: Product) => p.stock <= p.minStock;
 
@@ -37,14 +41,14 @@ export const markup = (p: { costPrice: number; salePrice: number }) =>
   p.costPrice > 0 ? ((p.salePrice - p.costPrice) / p.costPrice) * 100 : 0;
 
 export function revenue(sales: Sale[]) {
-  return round2(sales.reduce((s, x) => s + x.total, 0));
+  return round2(sales.reduce((s, x) => s + saleNet(x), 0));
 }
 
 export function averageTicket(sales: Sale[]) {
   return sales.length ? revenue(sales) / sales.length : 0;
 }
 
-/** SÃ©rie diÃ¡ria (inclui dias sem venda) dos Ãºltimos `days` dias. */
+/** Série diária (inclui dias sem venda) dos últimos `days` dias. */
 export function dailySeries(sales: Sale[], days: number, now = new Date()) {
   const out: { key: string; label: string; total: number; count: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -60,14 +64,14 @@ export function dailySeries(sales: Sale[], days: number, now = new Date()) {
   for (const s of sales) {
     const i = idx.get(dayKey(s.date));
     if (i !== undefined) {
-      out[i].total = round2(out[i].total + s.total);
+      out[i].total = round2(out[i].total + saleNet(s));
       out[i].count += 1;
     }
   }
   return out;
 }
 
-/** SÃ©rie diÃ¡ria cobrindo exatamente um intervalo (limitado a 366 dias). */
+/** Série diária cobrindo exatamente um intervalo (limitado a 366 dias). */
 export function seriesForRange(sales: Sale[], range: DateRange, now = new Date()) {
   const dates = sales.map((s) => new Date(s.date).getTime());
   const to = range.to ?? now;
@@ -84,8 +88,8 @@ export function topProducts(sales: Sale[], limit = 5) {
   for (const s of sales)
     for (const i of s.items) {
       const cur = map.get(i.productId) ?? { name: i.name, sku: i.sku, qty: 0, revenue: 0 };
-      cur.qty += i.qty;
-      cur.revenue = round2(cur.revenue + i.qty * i.unitPrice);
+      cur.qty += i.qty - i.returnedQty;
+      cur.revenue = round2(cur.revenue + (i.qty - i.returnedQty) * i.unitPrice);
       map.set(i.productId, cur);
     }
   return [...map.entries()]
@@ -96,12 +100,13 @@ export function topProducts(sales: Sale[], limit = 5) {
 
 export function paymentBreakdown(sales: Sale[]) {
   const map = new Map<PaymentMethod, { total: number; count: number }>();
-  for (const s of sales) {
-    const cur = map.get(s.payment) ?? { total: 0, count: 0 };
-    cur.total = round2(cur.total + s.total);
-    cur.count += 1;
-    map.set(s.payment, cur);
-  }
+  for (const s of sales)
+    for (const p of s.payments) {
+      const cur = map.get(p.method) ?? { total: 0, count: 0 };
+      cur.total = round2(cur.total + p.amount);
+      cur.count += 1;
+      map.set(p.method, cur);
+    }
   return [...map.entries()].map(([method, v]) => ({ method, ...v }));
 }
 
@@ -128,7 +133,7 @@ export function topClients(state: AppState, sales: Sale[], limit = 10) {
     .slice(0, limit);
 }
 
-/** HistÃ³rico unificado: vendas (entradas automÃ¡ticas) + lanÃ§amentos manuais. */
+/** Histórico unificado: vendas (entradas automáticas) + lançamentos manuais. */
 export function movements(state: AppState, range: DateRange): Movement[] {
   const fromSales: Movement[] = salesInRange(state.sales, range).map((s) => ({
     id: s.id,
@@ -136,7 +141,7 @@ export function movements(state: AppState, range: DateRange): Movement[] {
     type: "entrada",
     category: "Vendas",
     description: `Venda #${String(s.number).padStart(4, "0")}`,
-    amount: s.total,
+    amount: saleNet(s),
     origin: "venda",
   }));
   const manual: Movement[] = state.transactions
@@ -146,10 +151,10 @@ export function movements(state: AppState, range: DateRange): Movement[] {
 }
 
 /**
- * Faturamento â‰  lucro:
- *  - lucro bruto = faturamento âˆ’ custo dos produtos vendidos
- *  - resultado   = lucro bruto âˆ’ despesas operacionais
- *  - compras de estoque ficam fora das despesas (o custo jÃ¡ Ã© contado no CMV)
+ * Faturamento ≠ lucro:
+ *  - lucro bruto = faturamento − custo dos produtos vendidos
+ *  - resultado   = lucro bruto − despesas operacionais
+ *  - compras de estoque ficam fora das despesas (o custo já é contado no CMV)
  *    mas saem do fluxo de caixa.
  */
 export function financeSummary(state: AppState, range: DateRange) {
@@ -179,7 +184,7 @@ export function financeSummary(state: AppState, range: DateRange) {
   };
 }
 
-/** Fluxo de caixa diÃ¡rio com saldo acumulado dentro do intervalo. */
+/** Fluxo de caixa diário com saldo acumulado dentro do intervalo. */
 export function cashFlowSeries(state: AppState, range: DateRange, now = new Date()) {
   const moves = movements(state, range);
   const dates = moves.map((m) => new Date(m.date).getTime());

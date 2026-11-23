@@ -35,7 +35,8 @@ export function SuppliersView() {
       danger: true,
     });
     if (!yes) return;
-    actions.deleteSupplier(s.id);
+    const res = await actions.deleteSupplier(s.id);
+    if (!res.ok) return toast.error(res.error);
     toast.success("Fornecedor excluído.");
   }
 

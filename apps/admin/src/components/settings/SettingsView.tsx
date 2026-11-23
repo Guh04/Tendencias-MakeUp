@@ -1,34 +1,35 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Database, Download, ImagePlus, RotateCcw, Trash2 } from "lucide-react";
+import { Database, Download, ImagePlus } from "lucide-react";
 import type { PaymentMethod, Settings } from "@tendencias/core/types";
-import { PAYMENT_LABELS, PAYMENT_METHODS } from "@tendencias/core/format";
+import { PAYMENT_LABELS, PAYMENT_METHODS, parseNumber } from "@tendencias/core/format";
 import { isValidEmail, isValidPhone, maskPhone } from "@tendencias/core/validation";
 import { actions, useAppState } from "@/lib/store";
-import { useConfirm, useToast } from "@/hooks/useFeedback";
+import { useToast } from "@/hooks/useFeedback";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Field, Input, Select, hasErrors, type Errors } from "@/components/ui/Form";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-type Key = "storeName" | "phone" | "email" | "defaultMinStock";
+type Key = "storeName" | "phone" | "email" | "defaultMinStock" | "maxOperatorDiscountPct";
 const MAX_LOGO_BYTES = 300 * 1024;
 
 export function SettingsView() {
   const state = useAppState();
-  // Remonta o formulário se as configurações mudarem por fora (ex.: limpar dados).
+  // Remonta o formulário quando as configurações mudam (ex.: salvas por outro administrador).
   return <SettingsForm key={JSON.stringify(state.settings)} />;
 }
 
 function SettingsForm() {
   const state = useAppState();
   const toast = useToast();
-  const confirm = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<Settings>(state.settings);
   const [minStock, setMinStock] = useState(String(state.settings.defaultMinStock));
+  const [maxDiscount, setMaxDiscount] = useState(String(state.settings.maxOperatorDiscountPct).replace(".", ","));
   const [errors, setErrors] = useState<Errors<Key>>({});
+  const [busy, setBusy] = useState(false);
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -45,7 +46,7 @@ function SettingsForm() {
     reader.readAsDataURL(file);
   }
 
-  function submit(ev: React.FormEvent) {
+  async function submit(ev: React.FormEvent) {
     ev.preventDefault();
     const e: Errors<Key> = {};
     if (form.storeName.trim().length < 2) e.storeName = "Informe o nome da loja.";
@@ -53,10 +54,19 @@ function SettingsForm() {
     if (form.email.trim() && !isValidEmail(form.email)) e.email = "E-mail inválido.";
     const min = Number(minStock);
     if (!Number.isInteger(min) || min < 0) e.defaultMinStock = "Use um número inteiro maior ou igual a zero.";
+    const disc = parseNumber(maxDiscount);
+    if (!Number.isFinite(disc) || disc < 0 || disc > 100) e.maxOperatorDiscountPct = "Informe um valor entre 0 e 100.";
     setErrors(e);
     if (hasErrors(e)) return;
 
-    const res = actions.updateSettings({ ...form, storeName: form.storeName.trim(), defaultMinStock: min });
+    setBusy(true);
+    const res = await actions.updateSettings({
+      ...form,
+      storeName: form.storeName.trim(),
+      defaultMinStock: min,
+      maxOperatorDiscountPct: disc,
+    });
+    setBusy(false);
     if (res.ok) toast.success("Configurações salvas.");
     else toast.error(res.error);
   }
@@ -70,30 +80,6 @@ function SettingsForm() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Arquivo exportado.");
-  }
-
-  async function reset() {
-    const yes = await confirm({
-      title: "Restaurar dados de demonstração",
-      message: "Todos os dados atuais serão substituídos pelos dados fictícios iniciais (as configurações da loja também voltam ao padrão).",
-      confirmLabel: "Restaurar",
-      danger: true,
-    });
-    if (!yes) return;
-    actions.resetDemo();
-    toast.success("Dados de demonstração restaurados.");
-  }
-
-  async function clearAll() {
-    const yes = await confirm({
-      title: "Apagar todos os dados",
-      message: "Produtos, clientes, fornecedores, vendas e movimentações serão apagados permanentemente deste navegador. As configurações da loja são mantidas.",
-      confirmLabel: "Apagar tudo",
-      danger: true,
-    });
-    if (!yes) return;
-    actions.clearAll();
-    toast.success("Dados apagados. O sistema está pronto para começar do zero.");
   }
 
   return (
@@ -169,37 +155,37 @@ function SettingsForm() {
                 ))}
               </Select>
             </Field>
+            <Field
+              label="Desconto máximo do operador (%)"
+              error={errors.maxOperatorDiscountPct}
+              hint="Acima disso, só um administrador pode conceder."
+            >
+              <Input inputMode="decimal" value={maxDiscount} onChange={(e) => setMaxDiscount(e.target.value)} invalid={!!errors.maxOperatorDiscountPct} />
+            </Field>
           </div>
         </Card>
 
         <div className="flex justify-end">
-          <Button type="submit">Salvar configurações</Button>
+          <Button type="submit" disabled={busy}>
+            {busy ? "Salvando..." : "Salvar configurações"}
+          </Button>
         </div>
       </form>
 
       <Card>
-        <CardHeader title="Dados e armazenamento" subtitle="Versão de demonstração" />
+        <CardHeader title="Dados e armazenamento" />
         <div className="space-y-4 p-5">
-          <div className="flex gap-3 rounded-xl bg-gold-300/20 p-4 text-sm text-ink-700">
+          <div className="flex gap-3 rounded-xl bg-nude-100 p-4 text-sm text-ink-700">
             <Database className="mt-0.5 size-4 shrink-0 text-gold-600" />
             <p>
-              Os dados ficam no <strong>LocalStorage deste navegador</strong>. Isso não é um banco de
-              dados: não há criptografia, backup automático, controle de acesso nem sincronização entre
-              dispositivos ou usuários. Limpar os dados do navegador apaga tudo. Exporte um arquivo
-              para guardar uma cópia.
+              Os dados ficam no banco central da loja e são compartilhados em tempo real com o PDV.
+              Vendas, movimentações de estoque e registros financeiros não são apagados: cancelamentos
+              e devoluções ficam registrados no histórico.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={exportBackup}>
-              <Download className="size-4" /> Exportar dados (JSON)
-            </Button>
-            <Button variant="secondary" onClick={reset}>
-              <RotateCcw className="size-4" /> Restaurar demonstração
-            </Button>
-            <Button variant="danger" onClick={clearAll}>
-              <Trash2 className="size-4" /> Apagar todos os dados
-            </Button>
-          </div>
+          <Button variant="secondary" onClick={exportBackup}>
+            <Download className="size-4" /> Exportar cópia dos dados (JSON)
+          </Button>
         </div>
       </Card>
     </div>

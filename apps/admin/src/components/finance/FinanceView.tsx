@@ -50,7 +50,8 @@ export function FinanceView() {
       danger: true,
     });
     if (!yes) return;
-    actions.deleteTransaction(id);
+    const res = await actions.deleteTransaction(id);
+    if (!res.ok) return toast.error(res.error);
     toast.success("Movimentação excluída.");
   }
 

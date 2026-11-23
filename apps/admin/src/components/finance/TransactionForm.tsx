@@ -34,7 +34,9 @@ function Body({ onClose }: { onClose: () => void }) {
     setCategory((t === "saida" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES)[0]);
   }
 
-  function submit(ev: React.FormEvent) {
+  const [busy, setBusy] = useState(false);
+
+  async function submit(ev: React.FormEvent) {
     ev.preventDefault();
     const e: Errors<Key> = {};
     const value = parseNumber(amount);
@@ -45,15 +47,16 @@ function Body({ onClose }: { onClose: () => void }) {
     setErrors(e);
     if (hasErrors(e)) return;
 
-    const [y, m, d] = date.split("-").map(Number);
-    const when = new Date(y, m - 1, d, 12, 0, 0);
-    actions.addTransaction({
+    setBusy(true);
+    const res = await actions.addTransaction({
       type,
       category,
       description: description.trim(),
       amount: value,
-      date: when.toISOString(),
+      date,
     });
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
     toast.success("Movimentação registrada.");
     onClose();
   }
@@ -101,7 +104,9 @@ function Body({ onClose }: { onClose: () => void }) {
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit">Registrar</Button>
+        <Button type="submit" disabled={busy}>
+          Registrar
+        </Button>
       </div>
     </form>
   );

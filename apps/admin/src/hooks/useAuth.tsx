@@ -51,8 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void load();
+    // Nao chamar o Supabase dentro do callback (trava o bloqueio interno do cliente): adia para depois.
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void load();
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED")
+        setTimeout(() => void load(), 0);
     });
     return () => {
       cancelled = true;

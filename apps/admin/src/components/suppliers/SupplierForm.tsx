@@ -43,7 +43,9 @@ function Body({ supplier, onClose }: { supplier: Supplier | null; onClose: () =>
     setErrors((e) => ({ ...e, [k]: undefined }));
   };
 
-  function submit(ev: React.FormEvent) {
+  const [busy, setBusy] = useState(false);
+
+  async function submit(ev: React.FormEvent) {
     ev.preventDefault();
     const e: Errors<Key> = {};
     if (form.name.trim().length < 2) e.name = "Informe o nome da empresa.";
@@ -60,8 +62,10 @@ function Body({ supplier, onClose }: { supplier: Supplier | null; onClose: () =>
       email: form.email.trim(),
       notes: form.notes.trim(),
     };
-    if (supplier) actions.updateSupplier(supplier.id, input);
-    else actions.addSupplier(input);
+    setBusy(true);
+    const res = supplier ? await actions.updateSupplier(supplier.id, input) : await actions.addSupplier(input);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
     toast.success(supplier ? "Fornecedor atualizado." : "Fornecedor cadastrado com sucesso.");
     onClose();
   }
@@ -89,7 +93,9 @@ function Body({ supplier, onClose }: { supplier: Supplier | null; onClose: () =>
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit">{supplier ? "Salvar" : "Cadastrar fornecedor"}</Button>
+        <Button type="submit" disabled={busy}>
+          {supplier ? "Salvar" : "Cadastrar fornecedor"}
+        </Button>
       </div>
     </form>
   );

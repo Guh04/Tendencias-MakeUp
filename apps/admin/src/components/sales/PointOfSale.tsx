@@ -38,6 +38,8 @@ export function PointOfSale() {
   const [discountText, setDiscountText] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>(state.settings.defaultPayment);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [receivedText, setReceivedText] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const products = state.products;
 
@@ -99,25 +101,45 @@ export function PointOfSale() {
     setQty(id, (cart[id] ?? 0) + 1);
   }
 
-  function finalize() {
+  const receivedValue = receivedText.trim() ? parseNumber(receivedText) : total;
+  const receivedError =
+    payment === "dinheiro" && (!Number.isFinite(receivedValue) || receivedValue < total)
+      ? "O valor recebido é menor que o total."
+      : "";
+  const change = payment === "dinheiro" && !receivedError ? round2(receivedValue - total) : 0;
+
+  async function finalize() {
     if (discountError) {
       toast.error(discountError);
       return;
     }
-    const res = actions.finalizeSale({
+    if (receivedError) {
+      toast.error(receivedError);
+      return;
+    }
+    setBusy(true);
+    const res = await actions.finalizeSale({
       items: lines.map((l) => ({ productId: l.product.id, qty: l.qty })),
       discount,
       payment,
+      received: payment === "dinheiro" ? receivedValue : undefined,
       clientId: clientId || null,
     });
+    setBusy(false);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    toast.success(`Venda #${String(res.data.number).padStart(4, "0")} finalizada: ${formatBRL(res.data.total)}.`);
-    setReceipt(res.data);
+    const sale = res.data;
+    toast.success(
+      sale
+        ? `Venda #${String(sale.number).padStart(4, "0")} finalizada: ${formatBRL(sale.total)}.`
+        : "Venda finalizada.",
+    );
+    if (sale) setReceipt(sale);
     setCart({});
     setDiscountText("");
+    setReceivedText("");
     setClientId("");
   }
 
@@ -276,6 +298,18 @@ export function PointOfSale() {
               </div>
             </div>
 
+            {payment === "dinheiro" && (
+              <Field label="Valor recebido (R$)" error={receivedError} hint={change > 0 ? `Troco: ${formatBRL(change)}` : undefined}>
+                <Input
+                  inputMode="decimal"
+                  placeholder={total.toFixed(2).replace(".", ",")}
+                  value={receivedText}
+                  onChange={(e) => setReceivedText(e.target.value)}
+                  invalid={!!receivedError}
+                />
+              </Field>
+            )}
+
             <div className="space-y-1 border-t border-nude-100 pt-3 text-sm">
               <div className="flex justify-between text-ink-500">
                 <span>Subtotal</span>
@@ -291,8 +325,8 @@ export function PointOfSale() {
               </div>
             </div>
 
-            <Button className="w-full" onClick={finalize} disabled={!!discountError}>
-              Finalizar venda
+            <Button className="w-full" onClick={() => void finalize()} disabled={!!discountError || busy}>
+              {busy ? "Registrando..." : "Finalizar venda"}
             </Button>
           </div>
         )}

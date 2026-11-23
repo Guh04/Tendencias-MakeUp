@@ -1,301 +1,404 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type {
-  AppState,
-  Client,
-  PaymentMethod,
-  Product,
-  Sale,
-  Settings,
-  Supplier,
-  Transaction,
-} from "@tendencias/core/types";
-import { round2, uid } from "@tendencias/core/format";
-import { STATE_VERSION, createEmptyState, createSeedState } from "./seed";
+import type { AppState, PaymentMethod, Product, Sale, Settings } from "@tendencias/core/types";
+import { createClient } from "@/lib/supabase/client";
+import { createEmptyState } from "./defaults";
+import {
+  friendlyError,
+  mapClient,
+  mapProduct,
+  mapSale,
+  mapSettings,
+  mapSupplier,
+  mapTransaction,
+  toCents,
+  type ProductRow,
+  type SaleRow,
+  type SettingsRow,
+  type TransactionRow,
+} from "./mappers";
 
 /**
- * Store local baseado em LocalStorage.
- * ATENÇÃO: demonstração — os dados ficam apenas neste navegador, sem
- * criptografia, backup ou suporte a múltiplos usuários.
+ * Store do ADMIN conectado ao banco central (Supabase).
+ * Mantem uma copia em memoria para as telas e recarrega apos cada operacao
+ * e quando o PDV (ou outro usuario) altera os dados (tempo real).
  */
-const STORAGE_KEY = "tendencias-makeup:v1";
+export type DataStatus = "idle" | "loading" | "ready" | "error";
+interface Meta {
+  status: DataStatus;
+  error: string;
+}
 
-let cache: AppState | null = null;
+const EMPTY = createEmptyState();
+let state: AppState = EMPTY;
+let meta: Meta = { status: "idle", error: "" };
 const listeners = new Set<() => void>();
-const SERVER_SNAPSHOT = createEmptyState();
+const emit = () => listeners.forEach((l) => l());
 
-function load(): AppState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AppState;
-      if (parsed?.version === STATE_VERSION) return parsed;
-    }
-  } catch {
-    /* dados corrompidos: recomeça com a demonstração */
-  }
-  return createSeedState();
+function setState(next: AppState) {
+  state = next;
+  emit();
 }
-
-function getSnapshot(): AppState {
-  if (!cache) {
-    cache = load();
-    persist(cache);
-  }
-  return cache;
+function setMeta(next: Meta) {
+  meta = next;
+  emit();
 }
-
-function persist(state: AppState): boolean {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY) {
-      cache = load();
-      listeners.forEach((l) => l());
-    }
-  };
-  window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
-}
-
-function commit(next: AppState): boolean {
-  cache = next;
-  const ok = persist(next);
-  listeners.forEach((l) => l());
-  return ok;
-}
-
-function current(): AppState {
-  return getSnapshot();
+function subscribe(l: () => void) {
+  listeners.add(l);
+  return () => listeners.delete(l);
 }
 
 export function useAppState(): AppState {
-  return useSyncExternalStore(subscribe, getSnapshot, () => SERVER_SNAPSHOT);
+  return useSyncExternalStore(subscribe, () => state, () => EMPTY);
+}
+export function useDataStatus(): Meta {
+  return useSyncExternalStore(subscribe, () => meta, () => meta);
 }
 
-const noopSubscribe = () => () => {};
-/** true somente depois da hidratação no cliente. */
-export function useHydrated(): boolean {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => true,
-    () => false,
-  );
+// ---------------------------------------------------------------------------
+// Carga de dados
+// ---------------------------------------------------------------------------
+type PageResult<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+
+async function fetchAll<T>(page: (from: number, to: number) => PageResult<T>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await page(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if ((data?.length ?? 0) < 1000) return out;
+  }
 }
 
+const COUNTED = new Set(["paga", "devolvida_parcial", "devolvida"]);
+
+async function load(): Promise<AppState> {
+  const db = createClient();
+  const [products, clients, suppliers, sales, transactions, settings, profiles] = await Promise.all([
+    fetchAll<ProductRow>((a, b) =>
+      db
+        .from("products")
+        .select("*, product_costs(cost_cents)")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .range(a, b) as unknown as PageResult<ProductRow>,
+    ),
+    fetchAll<{ id: string; name: string; phone: string; email: string; created_at: string }>((a, b) =>
+      db.from("clients").select("*").order("created_at", { ascending: false }).range(a, b) as unknown as PageResult<never>,
+    ),
+    fetchAll<{ id: string; name: string; contact: string; phone: string; email: string; notes: string }>((a, b) =>
+      db.from("suppliers").select("*").eq("active", true).order("created_at", { ascending: false }).range(a, b) as unknown as PageResult<never>,
+    ),
+    fetchAll<SaleRow>((a, b) =>
+      db
+        .from("sales")
+        .select(
+          "id, number, channel, status, operator_id, client_id, subtotal_cents, discount_cents, total_cents, created_at, paid_at, cancel_reason, " +
+            "sale_items(id, product_id, name, sku, qty, unit_price_cents, returned_qty, sale_item_costs(unit_cost_cents)), " +
+            "sale_payments(method, amount_cents, received_cents, change_cents), returns(refund_cents)",
+        )
+        .order("created_at", { ascending: false })
+        .range(a, b) as unknown as PageResult<SaleRow>,
+    ),
+    fetchAll<TransactionRow>((a, b) =>
+      db.from("transactions").select("*").order("occurred_on", { ascending: false }).range(a, b) as unknown as PageResult<TransactionRow>,
+    ),
+    db.from("settings").select("*").maybeSingle(),
+    db.from("profiles").select("id, full_name"),
+  ]);
+  if (settings.error) throw new Error(settings.error.message);
+
+  const allSales = sales.map(mapSale);
+  return {
+    products: products.map(mapProduct),
+    clients: clients.map(mapClient),
+    suppliers: suppliers.map(mapSupplier),
+    allSales,
+    sales: allSales.filter((s) => COUNTED.has(s.status)),
+    transactions: transactions.map(mapTransaction),
+    settings: settings.data ? mapSettings(settings.data as SettingsRow) : EMPTY.settings,
+    operators: (profiles.data ?? []).map((p) => ({ id: p.id as string, name: p.full_name as string })),
+  };
+}
+
+let reloading = false;
+let queued = false;
+export async function reload(): Promise<void> {
+  if (reloading) {
+    queued = true;
+    return;
+  }
+  reloading = true;
+  try {
+    setState(await load());
+    setMeta({ status: "ready", error: "" });
+  } catch (e) {
+    const message = friendlyError(e instanceof Error ? e.message : String(e));
+    // mantem os dados antigos se ja havia carga; so mostra erro de tela cheia na primeira vez
+    setMeta({ status: meta.status === "ready" ? "ready" : "error", error: message });
+  } finally {
+    reloading = false;
+    if (queued) {
+      queued = false;
+      void reload();
+    }
+  }
+}
+
+let started = false;
+let timer: ReturnType<typeof setTimeout> | null = null;
+let channel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null;
+
+/** Inicia a carga e a escuta em tempo real (idempotente). */
+export function startStore() {
+  if (started) return;
+  started = true;
+  setMeta({ status: "loading", error: "" });
+  void reload();
+  const db = createClient();
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => void reload(), 400);
+  };
+  let ch = db.channel("admin-sync");
+  for (const table of ["products", "sales", "clients", "stock_movements", "cash_sessions"])
+    ch = ch.on("postgres_changes", { event: "*", schema: "public", table }, schedule);
+  channel = ch.subscribe();
+}
+
+export function stopStore() {
+  if (timer) clearTimeout(timer);
+  if (channel) void createClient().removeChannel(channel);
+  channel = null;
+  started = false;
+  state = EMPTY;
+  setMeta({ status: "idle", error: "" });
+}
+
+// ---------------------------------------------------------------------------
+// Operacoes (todas gravam no banco e recarregam)
+// ---------------------------------------------------------------------------
 export type Result<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 const ok = <T,>(data: T): Result<T> => ({ ok: true, data });
-const fail = (error: string): Result<never> => ({ ok: false, error });
+const fail = (error: string): Result<never> => ({ ok: false, error: friendlyError(error) });
 
-export type ProductInput = Omit<Product, "id" | "createdAt">;
-export type ClientInput = Omit<Client, "id" | "createdAt">;
-export type SupplierInput = Omit<Supplier, "id">;
-export type TransactionInput = Omit<Transaction, "id">;
+async function run<T>(fn: () => Promise<{ data?: T; error: { message: string } | null }>): Promise<Result<T | undefined>> {
+  try {
+    const { data, error } = await fn();
+    if (error) return fail(error.message);
+    await reload();
+    return ok(data);
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Erro inesperado.");
+  }
+}
+
+export interface ProductInput {
+  name: string;
+  sku: string;
+  barcode: string;
+  category: string;
+  brand: string;
+  description: string;
+  costPrice: number;
+  salePrice: number;
+  stock: number;
+  minStock: number;
+  supplierId: string | null;
+  imageUrl: string | null;
+}
+export type ClientInput = { name: string; phone: string; email: string };
+export type SupplierInput = { name: string; contact: string; phone: string; email: string; notes: string };
+export type TransactionInput = { date: string; type: "entrada" | "saida"; category: string; description: string; amount: number };
 
 export interface SaleInput {
   items: { productId: string; qty: number }[];
   discount: number;
   payment: PaymentMethod;
+  /** Valor recebido (apenas dinheiro, para calcular troco). */
+  received?: number;
   clientId: string | null;
 }
 
+const db = () => createClient();
+
 export const actions = {
   // ---------- Produtos ----------
-  addProduct(input: ProductInput): Result<Product> {
-    const s = current();
-    if (s.products.some((p) => p.sku.toLowerCase() === input.sku.toLowerCase()))
-      return fail("Já existe um produto com este código/SKU.");
-    if (input.stock < 0) return fail("O estoque não pode ser negativo.");
-    const product: Product = { ...input, id: uid(), createdAt: new Date().toISOString() };
-    commit({ ...s, products: [product, ...s.products] });
-    return ok(product);
+  async addProduct(input: ProductInput): Promise<Result<undefined>> {
+    return run(async () =>
+      db().rpc("create_product", {
+        p_name: input.name,
+        p_barcode: input.barcode,
+        p_category: input.category,
+        p_cost_cents: toCents(input.costPrice),
+        p_price_cents: toCents(input.salePrice),
+        p_stock: input.stock,
+        p_description: input.description,
+        p_image_url: input.imageUrl,
+        p_brand: input.brand,
+        p_sku: input.sku,
+        p_min_stock: input.minStock,
+        p_supplier_id: input.supplierId,
+        p_origin: "admin",
+      }),
+    ) as Promise<Result<undefined>>;
   },
 
-  updateProduct(id: string, input: ProductInput): Result {
-    const s = current();
-    if (s.products.some((p) => p.id !== id && p.sku.toLowerCase() === input.sku.toLowerCase()))
-      return fail("Já existe outro produto com este código/SKU.");
-    if (input.stock < 0) return fail("O estoque não pode ser negativo.");
-    commit({ ...s, products: s.products.map((p) => (p.id === id ? { ...p, ...input } : p)) });
-    return ok(undefined);
+  async updateProduct(id: string, input: ProductInput): Promise<Result<undefined>> {
+    const current = state.products.find((p) => p.id === id);
+    try {
+      const { error } = await db()
+        .from("products")
+        .update({
+          name: input.name.trim(),
+          sku: input.sku.trim(),
+          barcode: input.barcode.trim() || null,
+          category: input.category,
+          brand: input.brand,
+          description: input.description,
+          price_cents: toCents(input.salePrice),
+          min_stock: input.minStock,
+          supplier_id: input.supplierId,
+          image_url: input.imageUrl,
+        })
+        .eq("id", id);
+      if (error) return fail(error.message);
+      const { error: costErr } = await db()
+        .from("product_costs")
+        .upsert({ product_id: id, cost_cents: toCents(input.costPrice) });
+      if (costErr) return fail(costErr.message);
+      if (current && input.stock !== current.stock) {
+        const { error: stockErr } = await db().rpc("adjust_stock", {
+          p_product_id: id,
+          p_delta: input.stock - current.stock,
+          p_reason: "Ajuste na edição do produto",
+          p_type: "ajuste",
+          p_origin: "admin",
+        });
+        if (stockErr) return fail(stockErr.message);
+      }
+      await reload();
+      return ok(undefined);
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : "Erro inesperado.");
+    }
   },
 
-  deleteProduct(id: string): Result {
-    const s = current();
-    commit({ ...s, products: s.products.filter((p) => p.id !== id) });
-    return ok(undefined);
+  /** Produtos nunca sao apagados (o historico de vendas depende deles): ficam arquivados. */
+  archiveProduct(id: string) {
+    return run(async () => db().from("products").update({ active: false }).eq("id", id));
   },
 
-  /** Entrada (delta > 0) ou saída (delta < 0) manual de estoque. */
-  adjustStock(id: string, delta: number): Result<number> {
-    const s = current();
-    const product = s.products.find((p) => p.id === id);
-    if (!product) return fail("Produto não encontrado.");
-    const next = product.stock + delta;
-    if (next < 0) return fail(`Estoque insuficiente: há apenas ${product.stock} unidade(s).`);
-    commit({ ...s, products: s.products.map((p) => (p.id === id ? { ...p, stock: next } : p)) });
-    return ok(next);
+  /** Entrada (delta > 0) ou saida (delta < 0) manual de estoque. */
+  adjustStock(id: string, delta: number, reason: string) {
+    return run(async () =>
+      db().rpc("adjust_stock", {
+        p_product_id: id,
+        p_delta: delta,
+        p_reason: reason || null,
+        p_type: delta > 0 ? "entrada" : "saida",
+        p_origin: "admin",
+      }),
+    );
   },
 
   // ---------- Clientes ----------
-  addClient(input: ClientInput): Result<Client> {
-    const s = current();
-    const client: Client = { ...input, id: uid(), createdAt: new Date().toISOString() };
-    commit({ ...s, clients: [client, ...s.clients] });
-    return ok(client);
+  addClient(input: ClientInput) {
+    return run(async () => db().from("clients").insert({ name: input.name, phone: input.phone, email: input.email }));
   },
-
-  updateClient(id: string, input: ClientInput): Result {
-    const s = current();
-    commit({ ...s, clients: s.clients.map((c) => (c.id === id ? { ...c, ...input } : c)) });
-    return ok(undefined);
+  updateClient(id: string, input: ClientInput) {
+    return run(async () => db().from("clients").update({ name: input.name, phone: input.phone, email: input.email }).eq("id", id));
   },
-
-  deleteClient(id: string): Result {
-    const s = current();
-    commit({
-      ...s,
-      clients: s.clients.filter((c) => c.id !== id),
-      sales: s.sales.map((x) => (x.clientId === id ? { ...x, clientId: null } : x)),
-    });
-    return ok(undefined);
+  deleteClient(id: string) {
+    return run(async () => db().from("clients").delete().eq("id", id));
   },
 
   // ---------- Fornecedores ----------
-  addSupplier(input: SupplierInput): Result<Supplier> {
-    const s = current();
-    const supplier: Supplier = { ...input, id: uid() };
-    commit({ ...s, suppliers: [supplier, ...s.suppliers] });
-    return ok(supplier);
+  addSupplier(input: SupplierInput) {
+    return run(async () => db().from("suppliers").insert(input));
   },
-
-  updateSupplier(id: string, input: SupplierInput): Result {
-    const s = current();
-    commit({ ...s, suppliers: s.suppliers.map((x) => (x.id === id ? { ...x, ...input } : x)) });
-    return ok(undefined);
+  updateSupplier(id: string, input: SupplierInput) {
+    return run(async () => db().from("suppliers").update(input).eq("id", id));
   },
-
-  deleteSupplier(id: string): Result {
-    const s = current();
-    commit({
-      ...s,
-      suppliers: s.suppliers.filter((x) => x.id !== id),
-      products: s.products.map((p) => (p.supplierId === id ? { ...p, supplierId: null } : p)),
-    });
-    return ok(undefined);
+  /** Arquiva o fornecedor (produtos vinculados mantem o historico). */
+  deleteSupplier(id: string) {
+    return run(async () => db().from("suppliers").update({ active: false }).eq("id", id));
   },
 
   // ---------- Vendas ----------
-  /** Valida estoque, registra a venda e baixa o estoque de forma atômica. */
-  finalizeSale(input: SaleInput): Result<Sale> {
-    const s = current();
+  async finalizeSale(input: SaleInput): Promise<Result<Sale | undefined>> {
     if (input.items.length === 0) return fail("Adicione ao menos um produto ao carrinho.");
-
-    const items: Sale["items"] = [];
-    for (const line of input.items) {
-      const product = s.products.find((p) => p.id === line.productId);
-      if (!product) return fail("Um dos produtos do carrinho não existe mais.");
-      if (!Number.isInteger(line.qty) || line.qty < 1)
-        return fail(`Quantidade inválida para "${product.name}".`);
-      if (line.qty > product.stock)
-        return fail(`Estoque insuficiente para "${product.name}": disponível ${product.stock}.`);
-      items.push({
-        productId: product.id,
-        name: product.name,
-        sku: product.sku,
-        qty: line.qty,
-        unitPrice: product.salePrice,
-        unitCost: product.costPrice,
+    const discount = toCents(input.discount);
+    const subtotal = input.items.reduce((sum, l) => {
+      const p = state.products.find((x) => x.id === l.productId);
+      return sum + (p ? toCents(p.salePrice) * l.qty : 0);
+    }, 0);
+    const total = subtotal - discount;
+    const received = input.payment === "dinheiro" ? toCents(input.received ?? total / 100) : total;
+    try {
+      const { data, error } = await db().rpc("checkout_sale", {
+        p_items: input.items.map((l) => ({ product_id: l.productId, qty: l.qty })),
+        p_payments: [{ method: input.payment, amount_cents: total, received_cents: received }],
+        p_discount_cents: discount,
+        p_client_id: input.clientId,
+        p_channel: "presencial",
+        p_require_session: false,
+        p_origin: "admin",
       });
+      if (error) return fail(error.message);
+      await reload();
+      const saleId = (data as { id: string }).id;
+      return ok(state.allSales.find((s) => s.id === saleId));
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : "Erro inesperado.");
     }
-
-    const subtotal = round2(items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0));
-    if (input.discount < 0) return fail("O desconto não pode ser negativo.");
-    if (input.discount > subtotal) return fail("O desconto não pode ser maior que o subtotal.");
-
-    const number = s.saleCounter + 1;
-    const sale: Sale = {
-      id: uid(),
-      number,
-      date: new Date().toISOString(),
-      clientId: input.clientId,
-      items,
-      subtotal,
-      discount: round2(input.discount),
-      total: round2(subtotal - input.discount),
-      payment: input.payment,
-    };
-
-    const sold = new Map(items.map((i) => [i.productId, i.qty]));
-    commit({
-      ...s,
-      saleCounter: number,
-      sales: [sale, ...s.sales],
-      products: s.products.map((p) =>
-        sold.has(p.id) ? { ...p, stock: p.stock - (sold.get(p.id) ?? 0) } : p,
-      ),
-    });
-    return ok(sale);
   },
 
-  /** Cancela a venda e devolve os itens ao estoque (produtos ainda cadastrados). */
-  cancelSale(id: string): Result {
-    const s = current();
-    const sale = s.sales.find((x) => x.id === id);
-    if (!sale) return fail("Venda não encontrada.");
-    const back = new Map(sale.items.map((i) => [i.productId, i.qty]));
-    commit({
-      ...s,
-      sales: s.sales.filter((x) => x.id !== id),
-      products: s.products.map((p) =>
-        back.has(p.id) ? { ...p, stock: p.stock + (back.get(p.id) ?? 0) } : p,
-      ),
-    });
-    return ok(undefined);
+  /** Cancela (nunca apaga) e devolve o estoque. Exige motivo. */
+  cancelSale(id: string, reason: string) {
+    return run(async () => db().rpc("cancel_sale", { p_sale_id: id, p_reason: reason }));
   },
 
   // ---------- Financeiro ----------
-  addTransaction(input: TransactionInput): Result<Transaction> {
-    const s = current();
-    const t: Transaction = { ...input, id: uid() };
-    commit({ ...s, transactions: [t, ...s.transactions] });
-    return ok(t);
+  addTransaction(input: TransactionInput) {
+    return run(async () =>
+      db().from("transactions").insert({
+        occurred_on: input.date.slice(0, 10),
+        type: input.type,
+        category: input.category,
+        description: input.description,
+        amount_cents: toCents(input.amount),
+      }),
+    );
+  },
+  deleteTransaction(id: string) {
+    return run(async () => db().from("transactions").delete().eq("id", id));
   },
 
-  deleteTransaction(id: string): Result {
-    const s = current();
-    commit({ ...s, transactions: s.transactions.filter((t) => t.id !== id) });
-    return ok(undefined);
-  },
-
-  // ---------- Configurações / dados ----------
-  updateSettings(settings: Settings): Result {
-    const s = current();
-    const saved = commit({ ...s, settings });
-    return saved ? ok(undefined) : fail("Não foi possível salvar (armazenamento do navegador cheio?).");
-  },
-
-  resetDemo(): Result {
-    commit(createSeedState());
-    return ok(undefined);
-  },
-
-  /** Zera produtos, vendas, clientes etc. mantendo as configurações da loja. */
-  clearAll(): Result {
-    const s = current();
-    commit({ ...createEmptyState(false), settings: s.settings });
-    return ok(undefined);
+  // ---------- Configuracoes ----------
+  updateSettings(s: Settings) {
+    return run(async () =>
+      db()
+        .from("settings")
+        .update({
+          store_name: s.storeName,
+          logo_url: s.logo || null,
+          phone: s.phone,
+          email: s.email,
+          address: s.address,
+          cnpj: s.cnpj,
+          owner: s.owner,
+          instagram: s.instagram,
+          default_min_stock: s.defaultMinStock,
+          default_payment: s.defaultPayment,
+          low_stock_alerts: s.lowStockAlerts,
+          max_operator_discount_pct: s.maxOperatorDiscountPct,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", true),
+    );
   },
 };
+
+export type { Product };
