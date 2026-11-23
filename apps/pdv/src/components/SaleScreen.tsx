@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ImageIcon, LogOut, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
+import { ArrowLeftRight, History, ImageIcon, Lock, LogOut, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { useCatalog } from "@/hooks/useCatalog";
@@ -12,13 +12,16 @@ import { useToast } from "@tendencias/ui/feedback";
 import { Button, IconButton } from "@tendencias/ui/button";
 import { EmptyState } from "@tendencias/ui/empty-state";
 import { Input, Select } from "@tendencias/ui/form";
+import { CashMovementModal } from "./CashMovementModal";
+import { CloseCashModal } from "./CloseCashModal";
+import { HistoryModal } from "./HistoryModal";
 import { NewProductModal } from "./NewProductModal";
 import { PaymentModal, type PaymentLine } from "./PaymentModal";
 import { ReceiptModal } from "./Receipt";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export function SaleScreen({ session, profile }: { session: CashSession; profile: Profile }) {
+export function SaleScreen({ session, profile, onSessionClosed }: { session: CashSession; profile: Profile; onSessionClosed: () => void }) {
   const { signOut } = useAuth();
   const toast = useToast();
   const { products, settings, status, reload } = useCatalog(true);
@@ -32,12 +35,15 @@ export function SaleScreen({ session, profile }: { session: CashSession; profile
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [newBarcode, setNewBarcode] = useState("");
+  const [histOpen, setHistOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const discountRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = profile.role === "admin";
   const canOverride = profile.can_override_stock || isAdmin;
-  const anyModal = payOpen || !!receipt || newOpen;
+  const anyModal = payOpen || !!receipt || newOpen || histOpen || moveOpen || closeOpen;
 
   const results = useMemo(() => {
     const t = norm(q.trim());
@@ -147,6 +153,15 @@ export function SaleScreen({ session, profile }: { session: CashSession; profile
       } else if (e.key === "F9") {
         e.preventDefault();
         openPayment();
+      } else if (e.key === "F6") {
+        e.preventDefault();
+        setMoveOpen(true);
+      } else if (e.key === "F7") {
+        e.preventDefault();
+        setHistOpen(true);
+      } else if (e.key === "F8") {
+        e.preventDefault();
+        openClose();
       } else if (e.key === "F10") {
         e.preventDefault();
         setNewBarcode("");
@@ -161,6 +176,11 @@ export function SaleScreen({ session, profile }: { session: CashSession; profile
   useEffect(() => {
     if (!anyModal) focusSearch();
   }, [anyModal, focusSearch]);
+
+  function openClose() {
+    if (lines.length > 0) return toast.error("Finalize ou limpe o carrinho antes de fechar o caixa.");
+    setCloseOpen(true);
+  }
 
   function openPayment() {
     if (lines.length === 0) return toast.error("Adicione ao menos um produto ao carrinho.");
@@ -226,6 +246,15 @@ export function SaleScreen({ session, profile }: { session: CashSession; profile
           Operador: <strong className="text-ink-900">{profile.full_name}</strong>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setHistOpen(true)}>
+            <History className="size-4" /> Histórico <kbd className="rounded bg-nude-100 px-1 text-[10px]">F7</kbd>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setMoveOpen(true)}>
+            <ArrowLeftRight className="size-4" /> Sangria/Suprimento <kbd className="rounded bg-nude-100 px-1 text-[10px]">F6</kbd>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={openClose}>
+            <Lock className="size-4" /> Fechar caixa <kbd className="rounded bg-nude-100 px-1 text-[10px]">F8</kbd>
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -440,6 +469,19 @@ export function SaleScreen({ session, profile }: { session: CashSession; profile
 
       <PaymentModal open={payOpen} totalCents={total} onClose={() => setPayOpen(false)} onConfirm={confirmPayment} />
       <ReceiptModal data={receipt} settings={settings} onClose={() => setReceipt(null)} />
+      <HistoryModal open={histOpen} profile={profile} settings={settings} onClose={() => setHistOpen(false)} onChanged={() => void reload()} />
+      <CashMovementModal open={moveOpen} onClose={() => setMoveOpen(false)} />
+      <CloseCashModal
+        open={closeOpen}
+        session={session}
+        operator={profile.full_name}
+        settings={settings}
+        onClose={() => setCloseOpen(false)}
+        onClosed={() => {
+          setCloseOpen(false);
+          onSessionClosed();
+        }}
+      />
       <NewProductModal
         open={newOpen}
         initialBarcode={newBarcode}

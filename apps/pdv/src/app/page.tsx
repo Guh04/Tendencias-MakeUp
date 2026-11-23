@@ -46,5 +46,5 @@ export default function PdvPage() {
     return <Denied message="Seu usuário está desativado. Fale com o administrador da loja." onSignOut={signOut} />;
   if (cash.loading) return <Splash />;
   if (!cash.session) return <OpenCash onOpened={() => void cash.refresh()} />;
-  return <SaleScreen session={cash.session} profile={state.profile} />;
+  return <SaleScreen session={cash.session} profile={state.profile} onSessionClosed={() => void cash.refresh()} />;
 }
