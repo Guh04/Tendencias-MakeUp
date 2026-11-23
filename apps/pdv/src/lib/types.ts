@@ -31,6 +31,7 @@ export interface ReceiptData {
   number: number;
   date: string;
   operator: string;
+  client?: string;
   items: { name: string; qty: number; unitCents: number }[];
   subtotalCents: number;
   discountCents: number;

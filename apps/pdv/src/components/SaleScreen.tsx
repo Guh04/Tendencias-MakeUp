@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, History, ImageIcon, Lock, LogOut, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
+import { ArrowLeftRight, History, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { useCatalog } from "@/hooks/useCatalog";
@@ -13,6 +13,7 @@ import { Button, IconButton } from "@tendencias/ui/button";
 import { EmptyState } from "@tendencias/ui/empty-state";
 import { Input, Select } from "@tendencias/ui/form";
 import { CashMovementModal } from "./CashMovementModal";
+import { ClientPicker, type PosClient } from "./ClientPicker";
 import { CloseCashModal } from "./CloseCashModal";
 import { HistoryModal } from "./HistoryModal";
 import { NewProductModal } from "./NewProductModal";
@@ -35,6 +36,8 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [newBarcode, setNewBarcode] = useState("");
+  const [client, setClient] = useState<PosClient | null>(null);
+  const [clientOpen, setClientOpen] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -43,7 +46,7 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
 
   const isAdmin = profile.role === "admin";
   const canOverride = profile.can_override_stock || isAdmin;
-  const anyModal = payOpen || !!receipt || newOpen || histOpen || moveOpen || closeOpen;
+  const anyModal = payOpen || !!receipt || newOpen || histOpen || moveOpen || closeOpen || clientOpen;
 
   const results = useMemo(() => {
     const t = norm(q.trim());
@@ -147,6 +150,9 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
       if (e.key === "F2") {
         e.preventDefault();
         focusSearch();
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        setClientOpen(true);
       } else if (e.key === "F4") {
         e.preventDefault();
         discountRef.current?.focus();
@@ -193,7 +199,7 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
       p_items: lines.map((l) => ({ product_id: l.product.id, qty: l.qty })),
       p_payments: payments.map((p) => ({ method: p.method, amount_cents: p.amountCents, received_cents: p.receivedCents })),
       p_discount_cents: discount,
-      p_client_id: null,
+      p_client_id: client?.id ?? null,
       p_channel: "presencial",
       p_require_session: true,
       p_origin: "pdv",
@@ -208,6 +214,7 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
       number: sale.number,
       date: sale.paid_at ?? sale.created_at,
       operator: profile.full_name,
+      client: client?.name,
       items: lines.map((l) => ({ name: l.product.name, qty: l.qty, unitCents: l.product.priceCents })),
       subtotalCents: subtotal,
       discountCents: discount,
@@ -222,6 +229,7 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
     toast.success(`Venda #${String(sale.number).padStart(4, "0")} concluída: ${brl(total)}`);
     setCart({});
     setDiscountText("");
+    setClient(null);
     setPayOpen(false);
     void reload();
     return null;
@@ -419,6 +427,21 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
           </div>
 
           <div className="space-y-3 border-t border-nude-200 bg-nude-50 p-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setClientOpen(true)}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-nude-300 bg-white px-3 py-2 text-left text-sm hover:border-brand-400"
+              >
+                <UserRound className="size-4 shrink-0 text-brand-500" />
+                <span className="truncate">{client ? client.name : "Cliente (opcional)"}</span>
+                <kbd className="ml-auto rounded bg-nude-100 px-1 text-[10px] text-ink-500">F3</kbd>
+              </button>
+              {client && (
+                <button onClick={() => setClient(null)} className="text-xs text-ink-500 hover:text-red-600">
+                  Remover
+                </button>
+              )}
+            </div>
             <div className="flex items-start gap-2">
               <label className="flex-1 text-xs text-ink-500">
                 Desconto <kbd className="rounded bg-white px-1 text-[10px]">F4</kbd>
@@ -470,7 +493,7 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
       <PaymentModal open={payOpen} totalCents={total} onClose={() => setPayOpen(false)} onConfirm={confirmPayment} />
       <ReceiptModal data={receipt} settings={settings} onClose={() => setReceipt(null)} />
       <HistoryModal open={histOpen} profile={profile} settings={settings} onClose={() => setHistOpen(false)} onChanged={() => void reload()} />
-      <CashMovementModal open={moveOpen} onClose={() => setMoveOpen(false)} />
+      <CashMovementModal open={moveOpen} sessionId={session.id} onClose={() => setMoveOpen(false)} />
       <CloseCashModal
         open={closeOpen}
         session={session}
@@ -482,6 +505,7 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
           onSessionClosed();
         }}
       />
+      <ClientPicker open={clientOpen} onClose={() => setClientOpen(false)} onPick={setClient} />
       <NewProductModal
         open={newOpen}
         initialBarcode={newBarcode}

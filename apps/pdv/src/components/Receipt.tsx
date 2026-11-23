@@ -24,6 +24,7 @@ function ReceiptSheet({ data, settings, paper }: { data: ReceiptData; settings: 
         {date.toLocaleDateString("pt-BR")} {date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
       </p>
       <p>Operador: {data.operator}</p>
+      {data.client && <p>Cliente: {data.client}</p>}
       <Rule />
       {data.items.map((i, idx) => (
         <div key={idx} className="mb-0.5">
