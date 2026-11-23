@@ -1,0 +1,14 @@
+{
+    "name":  "@tendencias/core",
+    "version":  "0.1.0",
+    "private":  true,
+    "exports":  {
+                    "./types":  "./src/types.ts",
+                    "./format":  "./src/format.ts",
+                    "./validation":  "./src/validation.ts",
+                    "./metrics":  "./src/metrics.ts"
+                },
+    "scripts":  {
+                    "typecheck":  "tsc --noEmit"
+                }
+}

@@ -1,0 +1,1 @@
+{"name":"@tendencias/db","version":"0.1.0","private":true,"type":"module","scripts":{"test:integration":"node tests/integration.mjs"},"devDependencies":{"@supabase/supabase-js":"^2.119.2"}}
