@@ -1,0 +1,15 @@
+{
+  "name": "@tendencias/ui",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./button": "./src/button.tsx",
+    "./card": "./src/card.tsx",
+    "./form": "./src/form.tsx",
+    "./modal": "./src/modal.tsx",
+    "./empty-state": "./src/empty-state.tsx",
+    "./feedback": "./src/feedback.tsx",
+    "./theme.css": "./src/theme.css"
+  },
+  "scripts": { "typecheck": "echo ui: verificado pelos apps" }
+}

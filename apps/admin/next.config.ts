@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  transpilePackages: ["@tendencias/core"],
+  transpilePackages: ["@tendencias/core", "@tendencias/ui"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

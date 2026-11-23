@@ -10,7 +10,9 @@
                     "dev:admin":  "npm run dev -w @tendencias/admin",
                     "build:admin":  "npm run build -w @tendencias/admin",
                     "lint":  "npm run lint --workspaces --if-present",
-                    "typecheck":  "npm run typecheck --workspaces --if-present"
+                    "typecheck":  "npm run typecheck --workspaces --if-present",
+                    "dev:pdv":  "npm run dev -w @tendencias/pdv",
+                    "build:pdv":  "npm run build -w @tendencias/pdv"
                 },
     "overrides":  {
                       "typescript-eslint":  "8.73.0",
