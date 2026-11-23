@@ -15,6 +15,7 @@ import { dayKey, formatBRL } from "@tendencias/core/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, StatCard } from "@/components/ui/Card";
 import { SalesChart } from "@/components/dashboard/SalesChart";
+import { ChannelCard } from "@/components/dashboard/ChannelCard";
 import {
   RecentSalesCard,
   StockAlertsCard,
@@ -38,6 +39,7 @@ export default function DashboardPage() {
       ticket: averageTicket(last30),
       series: dailySeries(state.sales, 7, now),
       top: topProducts(last30, 5),
+      last30,
       low: state.products
         .filter(isLowStock)
         .sort((a, b) => a.stock - b.stock)
@@ -106,6 +108,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ChannelCard sales={data.last30} subtitle="Últimos 30 dias · PDV, painel administrativo e e-commerce" />
         <RecentSalesCard sales={data.recent} clients={state.clients} />
         <StockAlertsCard products={data.low} />
       </div>

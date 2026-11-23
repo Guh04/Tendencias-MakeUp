@@ -219,3 +219,27 @@ export function cashFlowSeries(state: AppState, range: DateRange, now = new Date
   }
   return rows;
 }
+
+export const ORIGIN_LABEL: Record<string, string> = {
+  pdv: "PDV (loja física)",
+  admin: "Painel administrativo",
+  ecommerce: "E-commerce",
+};
+
+/** Faturamento liquido por aplicativo/canal de origem da venda. */
+export function revenueByOrigin(sales: Sale[]) {
+  const map = new Map<string, { total: number; count: number }>();
+  for (const s of sales) {
+    const key = s.channel === "ecommerce" ? "ecommerce" : s.origin;
+    const cur = map.get(key) ?? { total: 0, count: 0 };
+    cur.total = round2(cur.total + saleNet(s));
+    cur.count += 1;
+    map.set(key, cur);
+  }
+  return ["pdv", "admin", "ecommerce"].map((key) => ({
+    key,
+    label: ORIGIN_LABEL[key],
+    total: map.get(key)?.total ?? 0,
+    count: map.get(key)?.count ?? 0,
+  }));
+}

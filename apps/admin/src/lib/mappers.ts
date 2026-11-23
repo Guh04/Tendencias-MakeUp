@@ -4,6 +4,7 @@ import type {
   Product,
   Sale,
   SaleChannel,
+  SaleOrigin,
   SaleStatus,
   Settings,
   Supplier,
@@ -34,6 +35,7 @@ export interface SaleRow {
   id: string;
   number: number;
   channel: SaleChannel;
+  origin: SaleOrigin;
   status: SaleStatus;
   operator_id: string | null;
   client_id: string | null;
@@ -114,9 +116,11 @@ export function mapSale(r: SaleRow): Sale {
     date: r.paid_at ?? r.created_at,
     status: r.status,
     channel: r.channel,
+    origin: r.origin,
     clientId: r.client_id,
     operatorId: r.operator_id,
     items: r.sale_items.map((i) => ({
+      id: i.id,
       productId: i.product_id,
       name: i.name,
       sku: i.sku,

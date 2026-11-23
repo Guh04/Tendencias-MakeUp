@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Ban, Eye, Receipt } from "lucide-react";
+import { Ban, Eye, Receipt, Undo2 } from "lucide-react";
 import type { Sale } from "@tendencias/core/types";
 import { PAYMENT_LABELS, PAYMENT_METHODS, formatBRL, formatDateTime, paymentSummary } from "@tendencias/core/format";
 import { inRange, revenue, saleUnits } from "@tendencias/core/metrics";
@@ -14,9 +14,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, Select, SearchInput, Textarea } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
+import { ReturnModal } from "./ReturnModal";
 import { SaleDetail, STATUS_LABEL, STATUS_TONE } from "./SaleDetail";
 
 const CANCELLABLE = new Set(["pendente", "paga", "devolvida_parcial"]);
+const RETURNABLE = new Set(["paga", "devolvida_parcial"]);
 const COUNTED = new Set(["paga", "devolvida_parcial", "devolvida"]);
 
 export function SalesHistory() {
@@ -26,6 +28,7 @@ export function SalesHistory() {
   const [payment, setPayment] = useState("");
   const [selected, setSelected] = useState<Sale | null>(null);
   const [cancelling, setCancelling] = useState<Sale | null>(null);
+  const [returning, setReturning] = useState<Sale | null>(null);
 
   const clientName = (id: string | null) => state.clients.find((c) => c.id === id)?.name ?? "Não identificado";
 
@@ -102,6 +105,11 @@ export function SalesHistory() {
                         <IconButton aria-label="Ver detalhes" title="Ver detalhes" onClick={() => setSelected(s)}>
                           <Eye className="size-4" />
                         </IconButton>
+                        {RETURNABLE.has(s.status) && (
+                          <IconButton aria-label="Devolver itens" title="Devolver itens" onClick={() => setReturning(s)}>
+                            <Undo2 className="size-4" />
+                          </IconButton>
+                        )}
                         {CANCELLABLE.has(s.status) && (
                           <IconButton aria-label="Cancelar venda" title="Cancelar venda" onClick={() => setCancelling(s)} className="hover:text-red-600">
                             <Ban className="size-4" />
@@ -136,6 +144,7 @@ export function SalesHistory() {
         }
       />
       <CancelSaleModal sale={cancelling} onClose={() => setCancelling(null)} />
+      <ReturnModal sale={returning} onClose={() => setReturning(null)} />
     </div>
   );
 }

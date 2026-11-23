@@ -94,7 +94,7 @@ async function load(): Promise<AppState> {
       db
         .from("sales")
         .select(
-          "id, number, channel, status, operator_id, client_id, subtotal_cents, discount_cents, total_cents, created_at, paid_at, cancel_reason, " +
+          "id, number, channel, origin, status, operator_id, client_id, subtotal_cents, discount_cents, total_cents, created_at, paid_at, cancel_reason, " +
             "sale_items(id, product_id, name, sku, qty, unit_price_cents, returned_qty, sale_item_costs(unit_cost_cents)), " +
             "sale_payments(method, amount_cents, received_cents, change_cents), returns(refund_cents)",
         )
@@ -358,6 +358,23 @@ export const actions = {
   /** Cancela (nunca apaga) e devolve o estoque. Exige motivo. */
   cancelSale(id: string, reason: string) {
     return run(async () => db().rpc("cancel_sale", { p_sale_id: id, p_reason: reason }));
+  },
+
+  /** Devolucao total ou parcial (dinheiro exige caixa aberto do administrador no PDV). */
+  registerReturn(
+    saleId: string,
+    items: { saleItemId: string; qty: number; restock: boolean }[],
+    reason: string,
+    method: PaymentMethod,
+  ) {
+    return run(async () =>
+      db().rpc("register_return", {
+        p_sale_id: saleId,
+        p_items: items.map((i) => ({ sale_item_id: i.saleItemId, qty: i.qty, restock: i.restock })),
+        p_reason: reason,
+        p_refund_method: method,
+      }),
+    );
   },
 
   // ---------- Financeiro ----------

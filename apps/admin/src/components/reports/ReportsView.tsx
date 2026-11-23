@@ -21,6 +21,7 @@ import { Badge, Card, CardHeader, StatCard } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
+import { ChannelCard } from "@/components/dashboard/ChannelCard";
 import { PaymentPie, SalesCountChart, TopProductsBar } from "./ReportCharts";
 
 export function ReportsView() {
@@ -63,6 +64,8 @@ export function ReportsView() {
         <StatCard label="Vendas" value={String(d.sales.length)} icon={Trophy} tone="gold" />
         <StatCard label="Ticket médio" value={formatBRL(d.ticket)} icon={Users} tone="green" />
       </div>
+
+      <ChannelCard sales={d.sales} subtitle="No período selecionado" />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>

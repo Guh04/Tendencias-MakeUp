@@ -36,7 +36,10 @@ export interface Supplier {
   notes: string;
 }
 
+export type SaleOrigin = "admin" | "pdv" | "ecommerce";
+
 export interface SaleItem {
+  id: string;
   productId: string;
   name: string;
   sku: string;
@@ -60,6 +63,8 @@ export interface Sale {
   date: string;
   status: SaleStatus;
   channel: SaleChannel;
+  /** Aplicativo onde a venda foi registrada. */
+  origin: SaleOrigin;
   clientId: string | null;
   operatorId: string | null;
   items: SaleItem[];
