@@ -91,5 +91,5 @@ begin
   if p.stock <> 8 then v_fail := v_fail + 1; end if;
 
   -- forca rollback total e devolve o relatorio na mensagem
-  raise exception 'RESULTADO: % falha(s)' || E'\n%', v_fail, v_log;
+  raise exception using message = 'RESULTADO: ' || v_fail || ' falha(s)' || E'\n' || v_log;
 end $$;
