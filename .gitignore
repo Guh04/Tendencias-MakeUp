@@ -44,3 +44,10 @@ next-env.d.ts
 packages/db/supabase/.temp/
 packages/db/supabase/.branches/
 tsconfig.tsbuildinfo
+
+# programa Windows (instalador e arquivos gerados)
+apps/desktop/dist/
+# backup: credenciais e copias dos dados nunca vao para o GitHub
+backup.env
+**/backups/
+backup.log

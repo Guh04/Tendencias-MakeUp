@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Lock, ScanBarcode } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCashSession } from "@/hooks/useCashSession";
@@ -39,8 +41,13 @@ export default function PdvPage() {
   const { state, signOut } = useAuth();
   const profile = state.status === "ready" && state.profile.active ? state.profile : null;
   const cash = useCashSession(profile?.id ?? null);
+  const router = useRouter();
+  const signedOut = state.status === "signed-out";
+  useEffect(() => {
+    if (signedOut) router.replace("/login");
+  }, [signedOut, router]);
 
-  if (state.status === "loading") return <Splash />;
+  if (state.status === "loading" || signedOut) return <Splash />;
   if (state.status !== "ready") return <Denied message="Sua sessão não é válida. Entre novamente." onSignOut={signOut} />;
   if (!state.profile.active)
     return <Denied message="Seu usuário está desativado. Fale com o administrador da loja." onSignOut={signOut} />;

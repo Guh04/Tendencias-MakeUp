@@ -1,28 +1,33 @@
 {
-    "name":  "tendencias-makeup",
-    "version":  "0.1.0",
-    "private":  true,
-    "workspaces":  [
-                       "apps/*",
-                       "packages/*"
-                   ],
-    "scripts":  {
-                    "dev:admin":  "npm run dev -w @tendencias/admin",
-                    "build:admin":  "npm run build -w @tendencias/admin",
-                    "lint":  "npm run lint --workspaces --if-present",
-                    "typecheck":  "npm run typecheck --workspaces --if-present",
-                    "dev:pdv":  "npm run dev -w @tendencias/pdv",
-                    "build:pdv":  "npm run build -w @tendencias/pdv"
-                },
-    "overrides":  {
-                      "typescript-eslint":  "8.73.0",
-                      "@typescript-eslint/eslint-plugin":  "8.73.0",
-                      "@typescript-eslint/parser":  "8.73.0",
-                      "@typescript-eslint/utils":  "8.73.0",
-                      "@typescript-eslint/type-utils":  "8.73.0",
-                      "@typescript-eslint/typescript-estree":  "8.73.0",
-                      "@typescript-eslint/scope-manager":  "8.73.0",
-                      "@typescript-eslint/types":  "8.73.0",
-                      "@typescript-eslint/visitor-keys":  "8.73.0"
-                  }
+    "name": "tendencias-makeup",
+    "version": "0.1.0",
+    "private": true,
+    "workspaces": [
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "dev:admin": "npm run dev -w @tendencias/admin",
+        "build:admin": "npm run build -w @tendencias/admin",
+        "lint": "npm run lint --workspaces --if-present",
+        "typecheck": "npm run typecheck --workspaces --if-present",
+        "dev:pdv": "npm run dev -w @tendencias/pdv",
+        "build:pdv": "npm run build -w @tendencias/pdv",
+        "build:web": "cross-env DESKTOP_BUILD=1 npm run build --workspace=@tendencias/admin --workspace=@tendencias/pdv",
+        "dist:desktop": "npm run build:web && npm run dist -w @tendencias/desktop"
+    },
+    "overrides": {
+        "typescript-eslint": "8.73.0",
+        "@typescript-eslint/eslint-plugin": "8.73.0",
+        "@typescript-eslint/parser": "8.73.0",
+        "@typescript-eslint/utils": "8.73.0",
+        "@typescript-eslint/type-utils": "8.73.0",
+        "@typescript-eslint/typescript-estree": "8.73.0",
+        "@typescript-eslint/scope-manager": "8.73.0",
+        "@typescript-eslint/types": "8.73.0",
+        "@typescript-eslint/visitor-keys": "8.73.0"
+    },
+    "devDependencies": {
+        "cross-env": "^10.1.0"
+    }
 }

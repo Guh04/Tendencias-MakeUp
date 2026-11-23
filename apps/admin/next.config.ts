@@ -1,10 +1,14 @@
 import type { NextConfig } from "next";
 
+/**
+ * Desenvolvimento: servidor normal.
+ * Instalador (DESKTOP_BUILD=1): site 100% estatico, servido de dentro do programa em /admin.
+ */
+const desktop = process.env.DESKTOP_BUILD === "1";
+
 const nextConfig: NextConfig = {
-  /* config options here */
   transpilePackages: ["@tendencias/core", "@tendencias/ui"],
-  cacheComponents: true,
-  partialPrefetching: true,
+  ...(desktop ? { output: "export", basePath: "/admin", images: { unoptimized: true } } : {}),
   turbopack: {
     rules: {
       "*.css": {

@@ -4,6 +4,7 @@ import { Printer } from "lucide-react";
 import { PAYMENT_LABELS } from "@tendencias/core/format";
 import type { PosSettings, ReceiptData } from "@/lib/types";
 import { brl } from "@/lib/money";
+import { printNow } from "@/lib/print";
 import { Button } from "@tendencias/ui/button";
 import { Modal } from "@tendencias/ui/modal";
 import { PaperToggle, PrintArea, Row, Rule, Sheet, usePaper, type Paper } from "./PrintArea";
@@ -81,7 +82,7 @@ export function ReceiptModal({
           <Button variant="ghost" onClick={onClose}>
             {closeLabel}
           </Button>
-          <Button onClick={() => window.print()}>
+          <Button onClick={() => void printNow()}>
             <Printer className="size-4" /> Imprimir comprovante
           </Button>
         </>

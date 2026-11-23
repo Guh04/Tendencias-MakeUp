@@ -1,15 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { isValidEmail } from "@tendencias/core/validation";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Form";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { state: auth } = useAuth();
+  useEffect(() => {
+    if (auth.status === "ready") router.replace("/");
+  }, [auth.status, router]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { CashSession, PosSettings } from "@/lib/types";
 import { brl, friendly, parseCents } from "@/lib/money";
 import { useToast } from "@tendencias/ui/feedback";
+import { printNow } from "@/lib/print";
 import { Button } from "@tendencias/ui/button";
 import { Field, Input, Textarea } from "@tendencias/ui/form";
 import { Modal } from "@tendencias/ui/modal";
@@ -177,7 +178,7 @@ function Body({
           <ReportSheet s={closed.summary} closed={closed} session={session} operator={operator} settings={settings} paper={paper} />
         </PrintArea>
         <div className="flex justify-end gap-2 border-t border-nude-100 pt-3">
-          <Button variant="secondary" onClick={() => window.print()}>
+          <Button variant="secondary" onClick={() => void printNow()}>
             <Printer className="size-4" /> Imprimir resumo
           </Button>
           <Button onClick={onClosed}>Concluir</Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CloudOff, Lock, Menu, Sparkles } from "lucide-react";
 import { reload, startStore, stopStore, useAppState, useDataStatus } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,6 +46,7 @@ function Notice({
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const state = useAppState();
   const data = useDataStatus();
   const { state: auth, signOut } = useAuth();
@@ -59,8 +60,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     else stopStore();
   }, [isAdmin]);
 
+  const signedOut = auth.status === "signed-out" && pathname !== "/login";
+  useEffect(() => {
+    if (signedOut) router.replace("/login");
+  }, [signedOut, router]);
+
   if (pathname === "/login") return <>{children}</>;
-  if (auth.status === "loading") return <Splash />;
+  if (auth.status === "loading" || signedOut) return <Splash />;
 
   if (auth.status !== "ready")
     return (

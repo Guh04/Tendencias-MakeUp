@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { KeyRound, Plus, ShieldCheck, UserCog } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { createUserAction, resetPasswordAction } from "@/app/usuarios/actions";
+import { createUserAction, resetPasswordAction } from "@/lib/adminUsers";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useFeedback";
 import { isValidEmail } from "@tendencias/core/validation";
