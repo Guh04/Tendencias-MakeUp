@@ -62,12 +62,15 @@ export function ReceiptModal({
   onClose,
   title = "Venda concluída",
   closeLabel = "Nova venda (Esc)",
+  highlightChange = false,
 }: {
   data: ReceiptData | null;
   settings: PosSettings;
   onClose: () => void;
   title?: string;
   closeLabel?: string;
+  /** Mostra o troco em fonte grande (logo apos a venda). */
+  highlightChange?: boolean;
 }) {
   const { paper, setPaper } = usePaper();
 
@@ -90,6 +93,12 @@ export function ReceiptModal({
     >
       {data && (
         <>
+          {highlightChange && data.payments.reduce((s, p) => s + p.changeCents, 0) > 0 && (
+            <div className="mb-3 rounded-2xl bg-emerald-50 p-4 text-center ring-2 ring-emerald-200">
+              <p className="text-xs font-semibold tracking-[0.25em] text-emerald-700 uppercase">Troco</p>
+              <p className="font-display text-6xl font-semibold text-emerald-700">{brl(data.payments.reduce((s, p) => s + p.changeCents, 0))}</p>
+            </div>
+          )}
           <PaperToggle paper={paper} onChange={setPaper} />
           <div className="overflow-x-auto rounded-xl border border-nude-200 bg-nude-50 p-3">
             <ReceiptSheet data={data} settings={settings} paper={paper} />

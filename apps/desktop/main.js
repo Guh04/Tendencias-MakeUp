@@ -126,6 +126,15 @@ function startServer() {
 let win = null;
 let port = 0;
 
+// Zoom da tela (lembrado entre aberturas). delta null = voltar ao normal.
+function changeZoom(delta) {
+  if (!win) return;
+  const current = win.webContents.getZoomLevel();
+  const next = delta === null ? 0 : Math.max(-3, Math.min(4, current + delta));
+  win.webContents.setZoomLevel(next);
+  writeConfig({ zoom: next });
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1366,
@@ -148,6 +157,10 @@ function createWindow() {
     win.show();
   });
   win.on("page-title-updated", (e) => e.preventDefault()); // mantem o nome do programa na barra
+  win.webContents.on("did-finish-load", () => {
+    const z = Number(readConfig().zoom);
+    if (Number.isFinite(z) && z !== win.webContents.getZoomLevel()) win.webContents.setZoomLevel(z);
+  });
   // so navega dentro do proprio programa; links externos abrem no navegador
   const origin = `http://127.0.0.1:${port}`;
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -243,6 +256,10 @@ async function buildMenu() {
         },
         { type: "separator" },
         { label: "Tela cheia", accelerator: "F11", click: () => win && win.setFullScreen(!win.isFullScreen()) },
+        { label: "Aumentar zoom", accelerator: "CmdOrCtrl+=", click: () => changeZoom(0.5) },
+        { label: "Aumentar zoom (Ctrl +)", accelerator: "CmdOrCtrl+Plus", visible: false, click: () => changeZoom(0.5) },
+        { label: "Diminuir zoom", accelerator: "CmdOrCtrl+-", click: () => changeZoom(-0.5) },
+        { label: "Zoom normal", accelerator: "CmdOrCtrl+0", click: () => changeZoom(null) },
         { role: "reload", label: "Recarregar" },
         { type: "separator" },
         { role: "quit", label: "Sair" },

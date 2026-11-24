@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, History, House, PauseCircle, WifiOff, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
+import { ArrowLeftRight, History, House, PauseCircle, Volume2, VolumeX, WifiOff, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import type { Catalog } from "@/hooks/useCatalog";
 import type { CashSession, PosProduct, ReceiptData } from "@/lib/types";
 import { brl, friendly, parseCents } from "@/lib/money";
 import { loadHeld, saveHeld, type HeldSale } from "@/lib/held";
+import { beepError, beepOk, isSoundEnabled, setSoundEnabled } from "@/lib/sound";
 import { parseNumber } from "@tendencias/core/format";
 import { useConfirm, useToast } from "@tendencias/ui/feedback";
 import { Button, IconButton } from "@tendencias/ui/button";
@@ -21,6 +22,29 @@ import { HistoryModal } from "./HistoryModal";
 import { NewProductModal } from "./NewProductModal";
 import { PaymentModal, type PaymentLine } from "./PaymentModal";
 import { ReceiptModal } from "./Receipt";
+
+function HeaderButton({
+  icon: Icon,
+  label,
+  kbd,
+  onClick,
+  variant = "ghost",
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  kbd?: string;
+  onClick: () => void;
+  variant?: "ghost" | "secondary";
+}) {
+  // em telas menores (notebook) mostra so o icone; o texto e o atalho aparecem em telas grandes e na dica
+  return (
+    <Button variant={variant} size="sm" onClick={onClick} title={kbd ? `${label} (${kbd})` : label} aria-label={label}>
+      <Icon className="size-4" />
+      <span className="hidden 2xl:inline">{label}</span>
+      {kbd && <kbd className="hidden rounded bg-nude-100 px-1 text-[10px] 2xl:inline">{kbd}</kbd>}
+    </Button>
+  );
+}
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -59,6 +83,7 @@ export function SaleScreen({
   const [moveOpen, setMoveOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
   const [held, setHeld] = useState<HeldSale[]>(() => loadHeld());
   const searchRef = useRef<HTMLInputElement>(null);
   const discountRef = useRef<HTMLInputElement>(null);
@@ -118,6 +143,7 @@ export function SaleScreen({
       return;
     }
     if (qty > product.stock && !canOverride) {
+      beepError();
       toast.error(
         product.stock === 0
           ? `"${product.name}" está sem estoque.`
@@ -130,6 +156,7 @@ export function SaleScreen({
   }
 
   function addProduct(p: PosProduct) {
+    beepOk();
     setQty(p, (cart[p.id] ?? 0) + 1);
     setQ("");
     setActive(0);
@@ -154,6 +181,7 @@ export function SaleScreen({
       const exact = products.find((p) => p.barcode === code || p.sku.toLowerCase() === code.toLowerCase());
       if (exact) return addProduct(exact);
       if (results[active]) return addProduct(results[active]);
+      beepError();
       toast.error(`Produto não encontrado: ${code}`);
       if (/^\d{4,}$/.test(code)) {
         setNewBarcode(code);
@@ -352,38 +380,37 @@ export function SaleScreen({
             <p className="text-[10px] tracking-[0.2em] text-gold-600 uppercase">PDV</p>
           </div>
         </div>
-        <div className="ml-4 hidden text-xs text-ink-500 md:block">
+        <div className="ml-4 hidden text-xs text-ink-500 xl:block">
           Caixa nº <strong className="text-ink-900">{session.number}</strong> · aberto às{" "}
           {new Date(session.openedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ·{" "}
           Operador: <strong className="text-ink-900">{profile.full_name}</strong>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => void goHome()}>
-            <House className="size-4" /> Início <kbd className="rounded bg-nude-100 px-1 text-[10px]">F1</kbd>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={holdOrList}>
-            <PauseCircle className="size-4" /> {held.length > 0 ? `Em espera (${held.length})` : "Em espera"}{" "}
-            <kbd className="rounded bg-nude-100 px-1 text-[10px]">F5</kbd>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setHistOpen(true)}>
-            <History className="size-4" /> Histórico <kbd className="rounded bg-nude-100 px-1 text-[10px]">F7</kbd>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setMoveOpen(true)}>
-            <ArrowLeftRight className="size-4" /> Sangria/Suprimento <kbd className="rounded bg-nude-100 px-1 text-[10px]">F6</kbd>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={openClose}>
-            <Lock className="size-4" /> Fechar caixa <kbd className="rounded bg-nude-100 px-1 text-[10px]">F8</kbd>
-          </Button>
-          <Button
+        <div className="ml-auto flex items-center gap-1">
+          <HeaderButton icon={House} label="Início" kbd="F1" onClick={() => void goHome()} />
+          <HeaderButton icon={PauseCircle} label={held.length > 0 ? `Em espera (${held.length})` : "Em espera"} kbd="F5" onClick={holdOrList} />
+          <HeaderButton icon={History} label="Histórico" kbd="F7" onClick={() => setHistOpen(true)} />
+          <HeaderButton icon={ArrowLeftRight} label="Sangria/Suprimento" kbd="F6" onClick={() => setMoveOpen(true)} />
+          <HeaderButton icon={Lock} label="Fechar caixa" kbd="F8" onClick={openClose} />
+          <HeaderButton
+            icon={PackagePlus}
+            label="Novo produto"
+            kbd="F10"
             variant="secondary"
-            size="sm"
             onClick={() => {
               setNewBarcode("");
               setNewOpen(true);
             }}
+          />
+          <IconButton
+            aria-label={soundOn ? "Desligar sons" : "Ligar sons"}
+            title={soundOn ? "Sons ligados (clique para desligar)" : "Sons desligados (clique para ligar)"}
+            onClick={() => {
+              setSoundEnabled(!soundOn);
+              setSoundOn(!soundOn);
+            }}
           >
-            <PackagePlus className="size-4" /> Novo produto <kbd className="rounded bg-nude-100 px-1 text-[10px]">F10</kbd>
-          </Button>
+            {soundOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+          </IconButton>
           <IconButton aria-label="Sair" title="Sair" onClick={signOut}>
             <LogOut className="size-4" />
           </IconButton>
@@ -613,7 +640,7 @@ export function SaleScreen({
 
       <HeldSalesModal open={heldOpen} held={held} products={products} onResume={resumeHeld} onDiscard={(h) => void discardHeld(h)} onClose={() => setHeldOpen(false)} />
       <PaymentModal open={payOpen} totalCents={total} onClose={() => setPayOpen(false)} onConfirm={confirmPayment} />
-      <ReceiptModal data={receipt} settings={settings} onClose={() => setReceipt(null)} />
+      <ReceiptModal data={receipt} settings={settings} highlightChange onClose={() => setReceipt(null)} />
       <HistoryModal open={histOpen} profile={profile} settings={settings} onClose={() => setHistOpen(false)} onChanged={() => void reload()} />
       <CashMovementModal open={moveOpen} sessionId={session.id} onClose={() => setMoveOpen(false)} />
       <CloseCashModal
