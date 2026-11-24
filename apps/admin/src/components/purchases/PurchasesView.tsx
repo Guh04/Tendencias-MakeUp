@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PurchaseModal } from "./PurchaseModal";
+import { TableSkeleton } from "@tendencias/ui/skeleton";
 
 interface Row {
   id: string;
@@ -68,7 +69,7 @@ export function PurchasesView() {
 
       <Card>
         {!rows ? (
-          <p className="p-6 text-sm text-ink-500">Carregando...</p>
+          <TableSkeleton />
         ) : rows.length === 0 ? (
           <EmptyState
             icon={PackagePlus}

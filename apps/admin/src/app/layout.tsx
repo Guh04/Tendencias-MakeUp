@@ -9,8 +9,8 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const playfair = Playfair_Display({ variable: "--font-playfair", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Tendencias MakeUp — BeautyPro",
-  description: "Sistema de gestão para lojas de maquiagem e cosméticos (versão de demonstração).",
+  title: "Administração · Tendencias MakeUp",
+  description: "Administração da Tendencias MakeUp: produtos, vendas, clientes, financeiro e relatórios.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -15,6 +15,7 @@ import { Field, Textarea } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
+import { TableSkeleton } from "@tendencias/ui/skeleton";
 
 interface Movement {
   id: string;
@@ -107,7 +108,7 @@ export function CashSessionsView() {
 
       <Card>
         {!rows ? (
-          <p className="p-6 text-sm text-ink-500">Carregando...</p>
+          <TableSkeleton />
         ) : rows.length === 0 ? (
           <EmptyState icon={Lock} title="Nenhum caixa no período" description="Os caixas abertos no PDV aparecem aqui." />
         ) : (

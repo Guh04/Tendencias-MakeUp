@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Select } from "@/components/ui/Form";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
+import { TableSkeleton } from "@tendencias/ui/skeleton";
 
 interface Row {
   id: number;
@@ -125,7 +126,7 @@ export function LogsView() {
           </Select>
         </div>
         {!rows ? (
-          <p className="p-6 text-sm text-ink-500">Carregando...</p>
+          <TableSkeleton />
         ) : rows.length === 0 ? (
           <EmptyState icon={ScrollText} title="Nenhuma atividade" description="Não há registros para os filtros selecionados." />
         ) : (

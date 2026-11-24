@@ -13,6 +13,7 @@ import { parseNumber } from "@tendencias/core/format";
 import { useConfirm, useToast } from "@tendencias/ui/feedback";
 import { Button, IconButton } from "@tendencias/ui/button";
 import { EmptyState } from "@tendencias/ui/empty-state";
+import { CardGridSkeleton } from "@tendencias/ui/skeleton";
 import { Input, Select } from "@tendencias/ui/form";
 import { CashMovementModal } from "./CashMovementModal";
 import { ClientPicker, type PosClient } from "./ClientPicker";
@@ -439,7 +440,7 @@ export function SaleScreen({
 
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
             {status === "loading" ? (
-              <p className="p-6 text-center text-ink-500">Carregando produtos...</p>
+              <CardGridSkeleton />
             ) : status === "error" ? (
               <EmptyState
                 icon={ShoppingCart}

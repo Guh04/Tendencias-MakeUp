@@ -20,12 +20,12 @@
   --color-gold-300: #e3cc9a;
   --color-gold-400: #d1b06b;
   --color-gold-500: #b8975a;
-  --color-gold-600: #997b44;
+  --color-gold-600: #7d6130;
 
   --color-ink-900: #2b1f22;
   --color-ink-700: #4a3a3e;
   --color-ink-500: #7a6a6e;
-  --color-ink-400: #9b8d90;
+  --color-ink-400: #837579;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-playfair), Georgia, serif;
@@ -41,6 +41,24 @@ body {
   background: var(--color-nude-50);
   color: var(--color-ink-900);
   font-family: var(--font-sans);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-nude-400) transparent;
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 ::selection {

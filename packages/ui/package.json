@@ -7,6 +7,7 @@
     "./card": "./src/card.tsx",
     "./form": "./src/form.tsx",
     "./modal": "./src/modal.tsx",
+    "./skeleton": "./src/skeleton.tsx",
     "./empty-state": "./src/empty-state.tsx",
     "./feedback": "./src/feedback.tsx",
     "./theme.css": "./src/theme.css"

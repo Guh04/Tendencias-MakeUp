@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, Input, Select, hasErrors, type Errors } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { TableSkeleton } from "@tendencias/ui/skeleton";
 
 type PermKey = "can_cancel_sales" | "can_refund" | "can_override_stock";
 const PERMS: { key: PermKey; label: string }[] = [
@@ -65,7 +66,7 @@ export function UsersView() {
 
       <Card>
         {!users ? (
-          <p className="p-6 text-sm text-ink-500">Carregando...</p>
+          <TableSkeleton />
         ) : users.length === 0 ? (
           <EmptyState icon={UserCog} title="Nenhum usuário" />
         ) : (

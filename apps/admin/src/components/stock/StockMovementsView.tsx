@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchInput, Select } from "@/components/ui/Form";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
+import { TableSkeleton } from "@tendencias/ui/skeleton";
 
 interface Row {
   id: number;
@@ -105,7 +106,7 @@ export function StockMovementsView() {
         </div>
 
         {!rows ? (
-          <p className="p-6 text-sm text-ink-500">Carregando...</p>
+          <TableSkeleton />
         ) : shown.length === 0 ? (
           <EmptyState icon={ArrowLeftRight} title="Nenhuma movimentação" description="Não há movimentações para os filtros selecionados." />
         ) : (
