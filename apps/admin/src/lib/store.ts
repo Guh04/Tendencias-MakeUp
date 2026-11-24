@@ -303,6 +303,28 @@ export const actions = {
     );
   },
 
+  /** Entrada de mercadoria (compra): varios produtos de uma vez; atualiza estoque e custo. Devolve o numero da compra. */
+  async receiveGoods(input: {
+    supplierId: string | null;
+    note: string;
+    registerExpense: boolean;
+    items: { productId: string; qty: number; unitCost: number }[];
+  }): Promise<Result<number>> {
+    try {
+      const { data, error } = await db().rpc("receive_goods", {
+        p_supplier_id: input.supplierId,
+        p_note: input.note,
+        p_register_expense: input.registerExpense,
+        p_items: input.items.map((i) => ({ product_id: i.productId, qty: i.qty, unit_cost_cents: toCents(i.unitCost) })),
+      });
+      if (error) return fail(error.message);
+      await reload();
+      return ok((data as { number: number }).number);
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : "Erro inesperado.");
+    }
+  },
+
   // ---------- Clientes ----------
   addClient(input: ClientInput) {
     return run(async () => db().from("clients").insert({ name: input.name, phone: input.phone, email: input.email }));

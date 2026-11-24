@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, ScanBarcode } from "lucide-react";
+import { Lock, ScanBarcode, WifiOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCashSession } from "@/hooks/useCashSession";
 import { useCatalog } from "@/hooks/useCatalog";
+import { useConnection } from "@/hooks/useConnection";
 import { Home } from "@/components/Home";
 import { SaleScreen } from "@/components/SaleScreen";
 import { Button } from "@tendencias/ui/button";
@@ -43,7 +44,18 @@ export default function PdvPage() {
   const profile = state.status === "ready" && state.profile.active ? state.profile : null;
   const cash = useCashSession(profile?.id ?? null);
   const catalog = useCatalog(!!profile);
+  const online = useConnection();
   const [view, setView] = useState<"home" | "sale">("home");
+  const reloadCatalog = catalog.reload;
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    // ao voltar a internet, atualiza produtos/estoque (o tempo real pode ter perdido eventos)
+    if (!online) wasOffline.current = true;
+    else if (wasOffline.current) {
+      wasOffline.current = false;
+      void reloadCatalog();
+    }
+  }, [online, reloadCatalog]);
   const router = useRouter();
   const signedOut = state.status === "signed-out";
   useEffect(() => {
@@ -56,27 +68,43 @@ export default function PdvPage() {
     return <Denied message="Seu usuário está desativado. Fale com o administrador da loja." onSignOut={signOut} />;
   if (cash.loading) return <Splash />;
 
+  const banner = !online && (
+    <div
+      className="fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-lg"
+      role="status"
+    >
+      <WifiOff className="size-4" /> Sem conexão com a internet
+    </div>
+  );
+
   if (view === "sale" && cash.session)
     return (
-      <SaleScreen
-        session={cash.session}
-        profile={state.profile}
-        catalog={catalog}
-        onHome={() => setView("home")}
-        onSessionClosed={() => {
-          setView("home");
-          void cash.refresh();
-        }}
-      />
+      <>
+        {banner}
+        <SaleScreen
+          session={cash.session}
+          profile={state.profile}
+          catalog={catalog}
+          online={online}
+          onHome={() => setView("home")}
+          onSessionClosed={() => {
+            setView("home");
+            void cash.refresh();
+          }}
+        />
+      </>
     );
 
   return (
-    <Home
-      session={cash.session}
-      profile={state.profile}
-      catalog={catalog}
-      onStartSales={() => setView("sale")}
-      onSessionChanged={() => void cash.refresh()}
-    />
+    <>
+      {banner}
+      <Home
+        session={cash.session}
+        profile={state.profile}
+        catalog={catalog}
+        onStartSales={() => setView("sale")}
+        onSessionChanged={() => void cash.refresh()}
+      />
+    </>
   );
 }

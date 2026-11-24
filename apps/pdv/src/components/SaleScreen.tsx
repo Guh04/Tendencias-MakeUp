@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, History, House, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
+import { ArrowLeftRight, History, House, PauseCircle, WifiOff, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import type { Catalog } from "@/hooks/useCatalog";
 import type { CashSession, PosProduct, ReceiptData } from "@/lib/types";
 import { brl, friendly, parseCents } from "@/lib/money";
+import { loadHeld, saveHeld, type HeldSale } from "@/lib/held";
 import { parseNumber } from "@tendencias/core/format";
 import { useConfirm, useToast } from "@tendencias/ui/feedback";
 import { Button, IconButton } from "@tendencias/ui/button";
@@ -15,6 +16,7 @@ import { Input, Select } from "@tendencias/ui/form";
 import { CashMovementModal } from "./CashMovementModal";
 import { ClientPicker, type PosClient } from "./ClientPicker";
 import { CloseCashModal } from "./CloseCashModal";
+import { HeldSalesModal } from "./HeldSalesModal";
 import { HistoryModal } from "./HistoryModal";
 import { NewProductModal } from "./NewProductModal";
 import { PaymentModal, type PaymentLine } from "./PaymentModal";
@@ -26,12 +28,14 @@ export function SaleScreen({
   session,
   profile,
   catalog,
+  online,
   onHome,
   onSessionClosed,
 }: {
   session: CashSession;
   profile: Profile;
   catalog: Catalog;
+  online: boolean;
   onHome: () => void;
   onSessionClosed: () => void;
 }) {
@@ -54,12 +58,14 @@ export function SaleScreen({
   const [histOpen, setHistOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [heldOpen, setHeldOpen] = useState(false);
+  const [held, setHeld] = useState<HeldSale[]>(() => loadHeld());
   const searchRef = useRef<HTMLInputElement>(null);
   const discountRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = profile.role === "admin";
   const canOverride = profile.can_override_stock || isAdmin;
-  const anyModal = payOpen || !!receipt || newOpen || histOpen || moveOpen || closeOpen || clientOpen;
+  const anyModal = payOpen || !!receipt || newOpen || histOpen || moveOpen || closeOpen || clientOpen || heldOpen;
 
   const results = useMemo(() => {
     const t = norm(q.trim());
@@ -181,6 +187,9 @@ export function SaleScreen({
       } else if (e.key === "F8") {
         e.preventDefault();
         openClose();
+      } else if (e.key === "F5") {
+        e.preventDefault();
+        holdOrList();
       } else if (e.key === "F1") {
         e.preventDefault();
         void goHome();
@@ -199,15 +208,80 @@ export function SaleScreen({
     if (!anyModal) focusSearch();
   }, [anyModal, focusSearch]);
 
+  function updateHeld(next: HeldSale[]) {
+    setHeld(next);
+    saveHeld(next);
+  }
+
+  /** Guarda o carrinho atual e limpa a tela. Devolve a lista nova (para encadear com "retomar"). */
+  function holdCurrent(): HeldSale[] {
+    const entry: HeldSale = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      items: lines.map((l) => ({ productId: l.product.id, qty: l.qty })),
+      discountText,
+      discountMode,
+      client,
+    };
+    const next = [...held, entry];
+    updateHeld(next);
+    setCart({});
+    setDiscountText("");
+    setClient(null);
+    return next;
+  }
+
+  function holdOrList() {
+    if (lines.length === 0) return setHeldOpen(true);
+    holdCurrent();
+    toast.success("Venda guardada em espera. Atenda a próxima cliente.");
+  }
+
+  function resumeHeld(h: HeldSale) {
+    const rest = (lines.length > 0 ? holdCurrent() : held).filter((x) => x.id !== h.id);
+    updateHeld(rest);
+    const next: Record<string, number> = {};
+    const notes: string[] = [];
+    for (const it of h.items) {
+      const product = products.find((p) => p.id === it.productId);
+      if (!product) {
+        notes.push("um produto não está mais disponível");
+        continue;
+      }
+      let qty = it.qty;
+      if (qty > product.stock && !canOverride) {
+        qty = product.stock;
+        notes.push(`"${product.name}" ajustado para ${qty} un. (estoque)`);
+      }
+      if (qty > 0) next[product.id] = qty;
+    }
+    setCart(next);
+    setDiscountText(h.discountText);
+    setDiscountMode(h.discountMode);
+    setClient(h.client);
+    setHeldOpen(false);
+    if (notes.length) toast.error(`Venda retomada com ajustes: ${notes.join("; ")}.`);
+  }
+
+  async function discardHeld(h: HeldSale) {
+    const ok = await confirm({
+      title: "Descartar venda em espera?",
+      message: "Os itens guardados serão perdidos.",
+      confirmLabel: "Descartar",
+      danger: true,
+    });
+    if (ok) updateHeld(held.filter((x) => x.id !== h.id));
+  }
+
   async function goHome() {
     if (lines.length > 0) {
       const ok = await confirm({
         title: "Voltar ao início?",
-        message: "O carrinho atual será descartado.",
-        confirmLabel: "Descartar e voltar",
-        danger: true,
+        message: "O carrinho atual será guardado em espera. Você pode retomá-lo depois.",
+        confirmLabel: "Guardar e voltar",
       });
       if (!ok) return;
+      holdCurrent();
     }
     onHome();
   }
@@ -218,6 +292,7 @@ export function SaleScreen({
   }
 
   function openPayment() {
+    if (!online) return toast.error("Sem conexão com a internet. A venda só pode ser finalizada quando a conexão voltar.");
     if (lines.length === 0) return toast.error("Adicione ao menos um produto ao carrinho.");
     if (discountError) return toast.error(discountError);
     setPayOpen(true);
@@ -285,6 +360,10 @@ export function SaleScreen({
         <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => void goHome()}>
             <House className="size-4" /> Início <kbd className="rounded bg-nude-100 px-1 text-[10px]">F1</kbd>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={holdOrList}>
+            <PauseCircle className="size-4" /> {held.length > 0 ? `Em espera (${held.length})` : "Em espera"}{" "}
+            <kbd className="rounded bg-nude-100 px-1 text-[10px]">F5</kbd>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setHistOpen(true)}>
             <History className="size-4" /> Histórico <kbd className="rounded bg-nude-100 px-1 text-[10px]">F7</kbd>
@@ -407,6 +486,11 @@ export function SaleScreen({
         <aside className="flex min-h-0 flex-col border-l border-nude-200 bg-white">
           <div className="flex items-center justify-between border-b border-nude-100 px-4 py-3">
             <h2 className="font-display text-lg font-semibold">Carrinho</h2>
+            {held.length > 0 && (
+              <button onClick={() => setHeldOpen(true)} className="ml-2 rounded-full bg-gold-300/30 px-2 py-0.5 text-[11px] font-medium text-gold-600 hover:bg-gold-300/50">
+                {held.length} em espera
+              </button>
+            )}
             {lines.length > 0 && (
               <button onClick={() => setCart({})} className="text-xs text-ink-500 hover:text-red-600">
                 Limpar
@@ -515,13 +599,19 @@ export function SaleScreen({
               </div>
             </div>
 
-            <Button className="h-14 w-full text-lg" onClick={openPayment} disabled={lines.length === 0 || !!discountError}>
+            {!online && (
+              <p className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                <WifiOff className="size-4 shrink-0" /> Sem conexão com a internet. Guarde a venda em espera (F5) ou aguarde a conexão voltar.
+              </p>
+            )}
+            <Button className="h-14 w-full text-lg" onClick={openPayment} disabled={lines.length === 0 || !!discountError || !online}>
               Finalizar venda <kbd className="rounded bg-white/20 px-1.5 text-xs">F9</kbd>
             </Button>
           </div>
         </aside>
       </div>
 
+      <HeldSalesModal open={heldOpen} held={held} products={products} onResume={resumeHeld} onDiscard={(h) => void discardHeld(h)} onClose={() => setHeldOpen(false)} />
       <PaymentModal open={payOpen} totalCents={total} onClose={() => setPayOpen(false)} onConfirm={confirmPayment} />
       <ReceiptModal data={receipt} settings={settings} onClose={() => setReceipt(null)} />
       <HistoryModal open={histOpen} profile={profile} settings={settings} onClose={() => setHistOpen(false)} onChanged={() => void reload()} />
