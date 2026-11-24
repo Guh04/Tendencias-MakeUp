@@ -97,3 +97,5 @@ export function useCatalog(enabled: boolean) {
 
   return { products, settings, status, reload: load };
 }
+
+export type Catalog = ReturnType<typeof useCatalog>;

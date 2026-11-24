@@ -1,63 +1,22 @@
 {
-    "name":  "@tendencias/desktop",
-    "productName":  "Tendencias MakeUp",
-    "version":  "0.1.0",
-    "private":  true,
-    "description":  "Tendencias MakeUp - PDV e Administracao",
-    "author":  "Tendencias MakeUp",
-    "main":  "main.js",
-    "scripts":  {
-                    "icon":  "node scripts/make-icon.js",
-                    "start":  "electron .",
-                    "dist":  "electron-builder --win --publish never"
-                },
-    "build":  {
-                  "appId":  "br.com.tendenciasmakeup.sistema",
-                  "productName":  "Tendencias MakeUp",
-                  "artifactName":  "TendenciasMakeUp-Setup-${version}.${ext}",
-                  "directories":  {
-                                      "output":  "dist"
-                                  },
-                  "files":  [
-                                "main.js",
-                                "preload.js",
-                                "assets/**"
-                            ],
-                  "extraResources":  [
-                                         {
-                                             "from":  "../admin/out",
-                                             "to":  "web/admin"
-                                         },
-                                         {
-                                             "from":  "../pdv/out",
-                                             "to":  "web/pdv"
-                                         }
-                                     ],
-                  "win":  {
-                              "target":  "nsis",
-                              "icon":  "assets/icon.ico"
-                          },
-                  "nsis":  {
-                               "oneClick":  false,
-                               "perMachine":  false,
-                               "allowToChangeInstallationDirectory":  true,
-                               "createDesktopShortcut":  true,
-                               "createStartMenuShortcut":  true,
-                               "shortcutName":  "Tendencias MakeUp"
-                           },
-                  "publish":  [
-                                  {
-                                      "provider":  "github",
-                                      "owner":  "Guh04",
-                                      "repo":  "Tendencias-MakeUp"
-                                  }
-                              ]
-              },
-    "dependencies":  {
-                         "electron-updater":  "^6.8.11"
-                     },
-    "devDependencies":  {
-                            "electron":  "45.4.1",
-                            "electron-builder":  "^26.18.0"
-                        }
+  "name": "@tendencias/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tendencias MakeUp - PDV e Administracao (dois programas)",
+  "author": "Tendencias MakeUp",
+  "main": "main.js",
+  "scripts": {
+    "icon": "node scripts/make-icon.js",
+    "start": "electron .",
+    "start:admin": "cross-env APP_TARGET=admin electron .",
+    "dist:pdv": "cross-env APP_TARGET=pdv electron-builder --config builder.config.js --win --publish never",
+    "dist:admin": "cross-env APP_TARGET=admin electron-builder --config builder.config.js --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "^26.18.0"
+  }
 }

@@ -1,9 +1,23 @@
-// Tendencias MakeUp - programa de Windows (PDV + Administracao).
+// Tendencias MakeUp - programa de Windows. Existem DOIS programas a partir deste mesmo codigo:
+// "pdv" (caixa) e "admin" (administracao). Cada instalador embute so a sua parte.
 // As telas ficam DENTRO do programa (arquivos estaticos); somente os dados vem da internet (Supabase).
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require("electron");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+
+const meta = (() => {
+  try {
+    return require("./package.json");
+  } catch {
+    return {};
+  }
+})();
+const TARGET = (app.isPackaged ? meta.appTarget : process.env.APP_TARGET) === "admin" ? "admin" : "pdv";
+const TITLE = TARGET === "admin" ? "Tendencias Admin" : "Tendencias PDV";
+// pasta de dados propria de cada programa (configuracao de impressora etc.)
+app.setName(TITLE);
+app.setPath("userData", path.join(app.getPath("appData"), TITLE));
 
 // ---------------------------------------------------------------------------
 // Configuracao simples (impressora etc.), guardada na pasta de dados do usuario
@@ -28,7 +42,7 @@ function writeConfig(patch) {
 }
 
 // ---------------------------------------------------------------------------
-// Servidor local somente-leitura para os dois sites estaticos (127.0.0.1)
+// Servidor local somente-leitura para o site estatico (127.0.0.1)
 // ---------------------------------------------------------------------------
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -45,8 +59,8 @@ const MIME = {
   ".map": "application/json",
 };
 
-const webRoot = () => (app.isPackaged ? path.join(process.resourcesPath, "web") : path.join(__dirname, "..")); // dev: ../admin/out e ../pdv/out
-const siteDir = (name) => (app.isPackaged ? path.join(webRoot(), name) : path.join(webRoot(), name, "out"));
+// instalado: resources/web/<programa>; desenvolvimento: ../<programa>/out
+const siteDir = () => (app.isPackaged ? path.join(process.resourcesPath, "web", TARGET) : path.join(__dirname, "..", TARGET, "out"));
 
 function resolveFile(root, rel) {
   const base = path.normalize(path.join(root, rel));
@@ -62,6 +76,8 @@ function resolveFile(root, rel) {
 }
 
 function startServer() {
+  const root = siteDir();
+  const prefix = new RegExp(`^/${TARGET}(/.*)?$`);
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -73,16 +89,15 @@ function startServer() {
         return;
       }
       if (pathname === "/") {
-        res.writeHead(302, { Location: "/pdv/" }).end();
+        res.writeHead(302, { Location: `/${TARGET}/` }).end();
         return;
       }
-      const m = /^\/(admin|pdv)(\/.*)?$/.exec(pathname);
+      const m = prefix.exec(pathname);
       if (!m) {
         res.writeHead(404).end("Nao encontrado");
         return;
       }
-      const root = siteDir(m[1]);
-      const rel = (m[2] ?? "/").replace(/^\//, "");
+      const rel = (m[1] ?? "/").replace(/^\//, "");
       const file = resolveFile(root, rel) ?? resolveFile(root, "404");
       if (!file) {
         res.writeHead(404).end("Nao encontrado");
@@ -92,7 +107,16 @@ function startServer() {
       res.writeHead(file.endsWith("404.html") && !rel.endsWith("404") ? 404 : 200, { "Content-Type": type, "Cache-Control": "no-cache" });
       fs.createReadStream(file).pipe(res);
     });
-    server.listen(0, "127.0.0.1", () => resolve(server.address().port));
+    // porta fixa por programa (mantem preferencias da tela entre aberturas); se ocupada, qualquer livre
+    const preferred = TARGET === "admin" ? 47312 : 47311;
+    let fell = false;
+    server.on("error", () => {
+      if (fell) return;
+      fell = true;
+      server.listen(0, "127.0.0.1");
+    });
+    server.on("listening", () => resolve(server.address().port));
+    server.listen(preferred, "127.0.0.1");
   });
 }
 
@@ -101,15 +125,6 @@ function startServer() {
 // ---------------------------------------------------------------------------
 let win = null;
 let port = 0;
-let currentApp = "pdv";
-
-function openApp(name) {
-  currentApp = name;
-  if (win) {
-    void win.loadURL(`http://127.0.0.1:${port}/${name}/`);
-    win.setTitle(name === "pdv" ? "Tendencias MakeUp - PDV" : "Tendencias MakeUp - Administração");
-  }
-}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -119,8 +134,8 @@ function createWindow() {
     minHeight: 640,
     show: false,
     backgroundColor: "#fdf9f6",
-    icon: path.join(__dirname, "assets", "icon.png"),
-    title: "Tendencias MakeUp",
+    icon: path.join(__dirname, "assets", `icon-${TARGET}.png`),
+    title: TITLE,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -132,6 +147,7 @@ function createWindow() {
     win.maximize();
     win.show();
   });
+  win.on("page-title-updated", (e) => e.preventDefault()); // mantem o nome do programa na barra
   // so navega dentro do proprio programa; links externos abrem no navegador
   const origin = `http://127.0.0.1:${port}`;
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -147,7 +163,7 @@ function createWindow() {
   win.on("closed", () => {
     win = null;
   });
-  openApp(currentApp);
+  void win.loadURL(`${origin}/${TARGET}/`);
 }
 
 // ---------------------------------------------------------------------------
@@ -175,18 +191,50 @@ ipcMain.handle("desktop:info", () => ({ version: app.getVersion(), printer: read
 async function buildMenu() {
   const cfg = readConfig();
   let printers = [];
-  try {
-    printers = win ? await win.webContents.getPrintersAsync() : [];
-  } catch {
-    printers = [];
+  if (TARGET === "pdv") {
+    try {
+      printers = win ? await win.webContents.getPrintersAsync() : [];
+    } catch {
+      printers = [];
+    }
   }
+  const printerMenu = {
+    label: "Impressora",
+    submenu: [
+      {
+        label: "Imprimir direto, sem janela de confirmação",
+        type: "checkbox",
+        checked: cfg.silent,
+        click: (item) => {
+          writeConfig({ silent: item.checked });
+          void buildMenu();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Padrão do Windows",
+        type: "radio",
+        checked: !cfg.printer,
+        click: () => {
+          writeConfig({ printer: "" });
+          void buildMenu();
+        },
+      },
+      ...printers.map((p) => ({
+        label: p.displayName || p.name,
+        type: "radio",
+        checked: cfg.printer === p.name,
+        click: () => {
+          writeConfig({ printer: p.name });
+          void buildMenu();
+        },
+      })),
+    ],
+  };
   const template = [
     {
       label: "Programa",
       submenu: [
-        { label: "PDV (caixa)", accelerator: "CmdOrCtrl+1", click: () => openApp("pdv") },
-        { label: "Administração", accelerator: "CmdOrCtrl+2", click: () => openApp("admin") },
-        { type: "separator" },
         {
           label: "Abrir ao ligar o computador",
           type: "checkbox",
@@ -200,46 +248,14 @@ async function buildMenu() {
         { role: "quit", label: "Sair" },
       ],
     },
-    {
-      label: "Impressora",
-      submenu: [
-        {
-          label: "Imprimir direto, sem janela de confirmação",
-          type: "checkbox",
-          checked: cfg.silent,
-          click: (item) => {
-            writeConfig({ silent: item.checked });
-            void buildMenu();
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Padrão do Windows",
-          type: "radio",
-          checked: !cfg.printer,
-          click: () => {
-            writeConfig({ printer: "" });
-            void buildMenu();
-          },
-        },
-        ...printers.map((p) => ({
-          label: p.displayName || p.name,
-          type: "radio",
-          checked: cfg.printer === p.name,
-          click: () => {
-            writeConfig({ printer: p.name });
-            void buildMenu();
-          },
-        })),
-      ],
-    },
+    ...(TARGET === "pdv" ? [printerMenu] : []),
     {
       label: "Ajuda",
       submenu: [
         { label: "Verificar atualizações", click: () => checkUpdates(true) },
         {
           label: `Versão ${app.getVersion()}`,
-          click: () => dialog.showMessageBox({ message: `Tendencias MakeUp\nVersão ${app.getVersion()}`, buttons: ["OK"] }),
+          click: () => dialog.showMessageBox({ message: `${TITLE}\nVersão ${app.getVersion()}`, buttons: ["OK"] }),
         },
       ],
     },

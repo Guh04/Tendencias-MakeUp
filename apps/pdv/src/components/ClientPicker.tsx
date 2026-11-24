@@ -19,23 +19,26 @@ export interface PosClient {
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+/** Selecao de cliente na venda; com `manage`, serve so para consultar e cadastrar clientes (tela inicial). */
 export function ClientPicker({
   open,
   onClose,
   onPick,
+  manage = false,
 }: {
   open: boolean;
   onClose: () => void;
-  onPick: (client: PosClient | null) => void;
+  onPick?: (client: PosClient | null) => void;
+  manage?: boolean;
 }) {
   return (
-    <Modal open={open} onClose={onClose} title="Cliente da venda" size="md">
-      {open && <Body onClose={onClose} onPick={onPick} />}
+    <Modal open={open} onClose={onClose} title={manage ? "Clientes" : "Cliente da venda"} size="md">
+      {open && <Body onClose={onClose} onPick={onPick ?? (() => {})} manage={manage} />}
     </Modal>
   );
 }
 
-function Body({ onClose, onPick }: { onClose: () => void; onPick: (c: PosClient | null) => void }) {
+function Body({ onClose, onPick, manage }: { onClose: () => void; onPick: (c: PosClient | null) => void; manage: boolean }) {
   const toast = useToast();
   const [clients, setClients] = useState<PosClient[] | null>(null);
   const [q, setQ] = useState("");
@@ -85,6 +88,13 @@ function Body({ onClose, onPick }: { onClose: () => void; onPick: (c: PosClient 
     setBusy(false);
     if (error) return toast.error(friendly(error.message));
     toast.success("Cliente cadastrado.");
+    if (manage) {
+      setClients((list) => [...(list ?? []), data as PosClient].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")));
+      setName("");
+      setPhone("");
+      setCreating(false);
+      return;
+    }
     onPick(data as PosClient);
     onClose();
   }
@@ -103,7 +113,7 @@ function Body({ onClose, onPick }: { onClose: () => void; onPick: (c: PosClient 
             Voltar
           </Button>
           <Button type="submit" disabled={busy}>
-            {busy ? "Salvando..." : "Cadastrar e selecionar"}
+            {busy ? "Salvando..." : manage ? "Cadastrar cliente" : "Cadastrar e selecionar"}
           </Button>
         </div>
       </form>
@@ -119,16 +129,18 @@ function Body({ onClose, onPick }: { onClose: () => void; onPick: (c: PosClient 
         <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
           <UserPlus className="size-4" /> Novo cliente
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            onPick(null);
-            onClose();
-          }}
-        >
-          <UserX className="size-4" /> Sem cliente
-        </Button>
+        {!manage && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              onPick(null);
+              onClose();
+            }}
+          >
+            <UserX className="size-4" /> Sem cliente
+          </Button>
+        )}
       </div>
       {!clients ? (
         <p className="p-4 text-center text-ink-500">Carregando...</p>
@@ -140,10 +152,11 @@ function Body({ onClose, onPick }: { onClose: () => void; onPick: (c: PosClient 
             <li key={c.id}>
               <button
                 onClick={() => {
+                  if (manage) return;
                   onPick(c);
                   onClose();
                 }}
-                className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-nude-50"
+                className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm ${manage ? "cursor-default" : "hover:bg-nude-50"}`}
               >
                 <span className="font-medium text-ink-900">{c.name}</span>
                 <span className="text-xs text-ink-500">{c.phone}</span>

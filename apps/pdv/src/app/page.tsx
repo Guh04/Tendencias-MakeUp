@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, ScanBarcode } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCashSession } from "@/hooks/useCashSession";
-import { OpenCash } from "@/components/OpenCash";
+import { useCatalog } from "@/hooks/useCatalog";
+import { Home } from "@/components/Home";
 import { SaleScreen } from "@/components/SaleScreen";
 import { Button } from "@tendencias/ui/button";
 
@@ -41,6 +42,8 @@ export default function PdvPage() {
   const { state, signOut } = useAuth();
   const profile = state.status === "ready" && state.profile.active ? state.profile : null;
   const cash = useCashSession(profile?.id ?? null);
+  const catalog = useCatalog(!!profile);
+  const [view, setView] = useState<"home" | "sale">("home");
   const router = useRouter();
   const signedOut = state.status === "signed-out";
   useEffect(() => {
@@ -52,6 +55,28 @@ export default function PdvPage() {
   if (!state.profile.active)
     return <Denied message="Seu usuário está desativado. Fale com o administrador da loja." onSignOut={signOut} />;
   if (cash.loading) return <Splash />;
-  if (!cash.session) return <OpenCash onOpened={() => void cash.refresh()} />;
-  return <SaleScreen session={cash.session} profile={state.profile} onSessionClosed={() => void cash.refresh()} />;
+
+  if (view === "sale" && cash.session)
+    return (
+      <SaleScreen
+        session={cash.session}
+        profile={state.profile}
+        catalog={catalog}
+        onHome={() => setView("home")}
+        onSessionClosed={() => {
+          setView("home");
+          void cash.refresh();
+        }}
+      />
+    );
+
+  return (
+    <Home
+      session={cash.session}
+      profile={state.profile}
+      catalog={catalog}
+      onStartSales={() => setView("sale")}
+      onSessionChanged={() => void cash.refresh()}
+    />
+  );
 }

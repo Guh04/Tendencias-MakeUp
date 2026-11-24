@@ -3,8 +3,9 @@ const fs = require("fs");
 const zlib = require("zlib");
 const path = require("path");
 const S = 256;
+const gold = [209, 176, 107], white = [255, 255, 255];
+function render(rose, deep) {
 const px = Buffer.alloc(S * S * 4);
-const rose = [155, 68, 88], deep = [103, 47, 60], gold = [209, 176, 107], white = [255, 255, 255];
 const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
 for (let y = 0; y < S; y++)
   for (let x = 0; x < S; x++) {
@@ -28,6 +29,9 @@ for (let y = 0; y < S; y++)
     const i = (y * S + x) * 4;
     if (c) { px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = a; }
   }
+return px;
+}
+function encode(px) {
 // PNG
 const crcT = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
 const crc = (b) => { let c = -1; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };
@@ -45,8 +49,18 @@ const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk
 const head = Buffer.alloc(22);
 head.writeUInt16LE(0, 0); head.writeUInt16LE(1, 2); head.writeUInt16LE(1, 4);
 head[6] = 0; head[7] = 0; head.writeUInt16LE(1, 10); head.writeUInt16LE(32, 12); head.writeUInt32LE(png.length, 14); head.writeUInt32LE(22, 18);
+return { png, ico: Buffer.concat([head, png]) };
+}
+
 const out = path.join(__dirname, "..", "assets");
 fs.mkdirSync(out, { recursive: true });
-fs.writeFileSync(path.join(out, "icon.png"), png);
-fs.writeFileSync(path.join(out, "icon.ico"), Buffer.concat([head, png]));
-console.log("icone gerado em", out);
+const variants = {
+  pdv: [[155, 68, 88], [103, 47, 60]], // rosa
+  admin: [[74, 62, 92], [38, 30, 52]], // ameixa escuro
+};
+for (const [name, [a, b]] of Object.entries(variants)) {
+  const { png, ico } = encode(render(a, b));
+  fs.writeFileSync(path.join(out, `icon-${name}.png`), png);
+  fs.writeFileSync(path.join(out, `icon-${name}.ico`), ico);
+}
+console.log("icones gerados em", out);

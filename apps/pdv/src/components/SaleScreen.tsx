@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, History, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
+import { ArrowLeftRight, History, House, ImageIcon, Lock, LogOut, UserRound, Minus, PackagePlus, Plus, ScanBarcode, ShoppingCart, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Profile } from "@/hooks/useAuth";
-import { useCatalog } from "@/hooks/useCatalog";
+import type { Catalog } from "@/hooks/useCatalog";
 import type { CashSession, PosProduct, ReceiptData } from "@/lib/types";
 import { brl, friendly, parseCents } from "@/lib/money";
 import { parseNumber } from "@tendencias/core/format";
-import { useToast } from "@tendencias/ui/feedback";
+import { useConfirm, useToast } from "@tendencias/ui/feedback";
 import { Button, IconButton } from "@tendencias/ui/button";
 import { EmptyState } from "@tendencias/ui/empty-state";
 import { Input, Select } from "@tendencias/ui/form";
@@ -22,10 +22,23 @@ import { ReceiptModal } from "./Receipt";
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export function SaleScreen({ session, profile, onSessionClosed }: { session: CashSession; profile: Profile; onSessionClosed: () => void }) {
+export function SaleScreen({
+  session,
+  profile,
+  catalog,
+  onHome,
+  onSessionClosed,
+}: {
+  session: CashSession;
+  profile: Profile;
+  catalog: Catalog;
+  onHome: () => void;
+  onSessionClosed: () => void;
+}) {
   const { signOut } = useAuth();
   const toast = useToast();
-  const { products, settings, status, reload } = useCatalog(true);
+  const confirm = useConfirm();
+  const { products, settings, status, reload } = catalog;
 
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -168,6 +181,9 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
       } else if (e.key === "F8") {
         e.preventDefault();
         openClose();
+      } else if (e.key === "F1") {
+        e.preventDefault();
+        void goHome();
       } else if (e.key === "F10") {
         e.preventDefault();
         setNewBarcode("");
@@ -182,6 +198,19 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
   useEffect(() => {
     if (!anyModal) focusSearch();
   }, [anyModal, focusSearch]);
+
+  async function goHome() {
+    if (lines.length > 0) {
+      const ok = await confirm({
+        title: "Voltar ao início?",
+        message: "O carrinho atual será descartado.",
+        confirmLabel: "Descartar e voltar",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    onHome();
+  }
 
   function openClose() {
     if (lines.length > 0) return toast.error("Finalize ou limpe o carrinho antes de fechar o caixa.");
@@ -254,6 +283,9 @@ export function SaleScreen({ session, profile, onSessionClosed }: { session: Cas
           Operador: <strong className="text-ink-900">{profile.full_name}</strong>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => void goHome()}>
+            <House className="size-4" /> Início <kbd className="rounded bg-nude-100 px-1 text-[10px]">F1</kbd>
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setHistOpen(true)}>
             <History className="size-4" /> Histórico <kbd className="rounded bg-nude-100 px-1 text-[10px]">F7</kbd>
           </Button>

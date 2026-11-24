@@ -14,7 +14,9 @@
         "dev:pdv": "npm run dev -w @tendencias/pdv",
         "build:pdv": "npm run build -w @tendencias/pdv",
         "build:web": "cross-env DESKTOP_BUILD=1 npm run build --workspace=@tendencias/admin --workspace=@tendencias/pdv",
-        "dist:desktop": "npm run build:web && npm run dist -w @tendencias/desktop"
+        "dist:desktop": "npm run build:web && npm run dist:pdv -w @tendencias/desktop && npm run dist:admin -w @tendencias/desktop",
+        "dist:pdv": "npm run build:web && npm run dist:pdv -w @tendencias/desktop",
+        "dist:admin": "npm run build:web && npm run dist:admin -w @tendencias/desktop"
     },
     "overrides": {
         "typescript-eslint": "8.73.0",
